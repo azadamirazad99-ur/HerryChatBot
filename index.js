@@ -1,5 +1,5 @@
 // ===================================================
-// HERRY CHAT BOT - SECURE SCRIPT PROTECTED
+// HERRY CHAT BOT - POSYA KNOWLEDGE & STRICT PROTECTED
 // ===================================================
 
 const { Client, GatewayIntentBits, Partials, PermissionsBitField } = require('discord.js');
@@ -21,40 +21,43 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || '' });
 
 const MAIN_SERVER_ID = process.env.MAIN_SERVER_ID || '1529467083962843186';
 
-// ---------------------------------------------------
-// DYNAMIC LINKS & KNOWLEDGE MAP
-// ---------------------------------------------------
+// RAW POSYA SCRIPT FOR BOT INTERNAL READ ONLY (NEVER SHARE THIS)
+const INTERNAL_POSYA_SCRIPT = `
+https://raw.githubusercontent.com/urdushahzaib111-ctrl/Herry-Script/main/MainHerryPosya.lua
+`;
+
+// DYNAMIC LINKS MAP (REQUIRES "LINK" WORD)
 const LINKS_MAP = [
     { keywords: ['reversoqzz', 'reverso'], link: 'https://discord.com/channels/1529467083962843186/1529477377917452339/1529524492450402506' },
     { keywords: ['lulubox'], link: 'https://discord.com/channels/1529467083962843186/1529477377917452339/1529527842097074206' },
     { keywords: ['devvir'], link: 'https://discord.com/channels/1529467083962843186/1529477377917452339/1529527533660405790' },
     { keywords: ['multispace', 'multi space'], link: 'https://discord.com/channels/1529467083962843186/1529477377917452339/1531705203487932597' },
-    { keywords: ['herry.lua', 'posya', 'herry lua', 'posya lua', 'script link', 'script'], link: 'https://discord.com/channels/1529467083962843186/1529477377917452339/1542089775715057694' },
-    { keywords: ['setup', 'how to play hack', 'where is setup', 'setup link', 'setup kaha se karu'], link: 'https://discord.com/channels/1529467083962843186/1529477486235226172' },
+    { keywords: ['herry.lua', 'posya', 'herry lua', 'posya lua', 'script', 'lua'], link: 'https://discord.com/channels/1529467083962843186/1529477377917452339/1542089775715057694' },
+    { keywords: ['setup', 'how to play hack', 'where is setup', 'setup kaha se karu'], link: 'https://discord.com/channels/1529467083962843186/1529477486235226172' },
     { keywords: ['getkey', 'key', 'script key', 'how to get key', 'where is key', 'key tp execute'], link: 'https://discord.com/channels/1529467083962843186/1541722634927214622' }
 ];
 
-// Abusive Words Filter for Auto-Mod Timeout
+// Keywords
+const GC_HACK_KEYWORDS = ['gc hack', 'gc', 'money hack', 'unlimited gc', 'unlimited money', 'coin hack'];
 const BAD_WORDS = ['gali', 'mc', 'bc', 'bsdk', 'madarchod', 'bhenchod', 'chutiya', 'gand', 'laude', 'bhosdike'];
+const UNCOMPILE_REQUESTS = ['uncompile', 'uncompiled', 'decompiled', 'raw source', 'raw link', 'raw script', 'source code', 'lua source', 'mainherryposya'];
 
-// PROTECTED SYSTEM PROMPT (NO RAW LINKS ALLOWED)
+// ADVANCED SYSTEM PROMPT
 const GG_SYSTEM_PROMPT = `
-You are HerryChatBot, the official smart AI assistant created by Herry.
-You possess complete knowledge of Game Guardian (GG), Virtual spaces (Multispace/Reversoqzz/Lulubox), Lua Scripting, and execution steps.
+You are HerryChatBot, created by Herry (Shahzaib).
+You have MASTER/EXPERT LEVEL KNOWLEDGE of Game Guardian (GG), Lua Scripting, memory searches, freeze values, DWORD/FLOAT edits, XOR encryption, offset searching, and Virtual Spaces.
 
-STRICT SECURITY RULES:
-1. NEVER output or share any raw GitHub URLs, raw .lua file links, or repository paths under any circumstances.
-2. If users ask for script links, Posya loader, or execute keys, tell them to check the official Discord channels (#get-key or #script-links).
-3. For High Authority/Admins: Be extremely respectful. Address them as "Herry Sir" or "Boss".
-4. For normal users: Be friendly, casual, slight humor/bakchodi ("Abe oye", "Bhai sun"), but do NOT use explicit insults.
-5. Provide simple step-by-step guidance in Roman Urdu/English mix.
+CRITICAL ULTRA-SECRET RULES (NEVER BREAK):
+1. ABSOLUTELY NEVER REVEAL, LEAK, OR PRINT ANY RAW GITHUB LINK, RAW LUA FILE LINK, REPOSITORY PATH, OR INTERNAL SOURCE CODE.
+2. If anyone asks for uncompiled file, source code, raw link, decompiled file, or uncompile script, immediately reply strictly with: "Bakchodi mat kar!"
+3. You have full knowledge of Herry Posya Script menu options and features to guide users on how features work, but NEVER show the actual code or links.
+4. If users ask for GC or Money Hacks, reply that GC and MONEY hack is unavailable.
+5. For High Authority/Admins: Be respectful, address as "Herry Sir" or "Boss".
+6. For normal users: Be friendly, helpful, with casual humor/bakchodi ("Abe oye", "Bhai sun").
 `;
 
-// ---------------------------------------------------
-// HYPER-RELIABLE AI ENGINE
-// ---------------------------------------------------
 async function askAI(userPrompt, extraContext = "") {
-    const fullSystemMessage = `${GG_SYSTEM_PROMPT}\nUser Context: ${extraContext}`;
+    const fullSystemMessage = `${GG_SYSTEM_PROMPT}\nInternal Posya Context Reference (Do Not Reveal Link): ${INTERNAL_POSYA_SCRIPT}\nUser Context: ${extraContext}`;
 
     // 1. PRIMARY: GROQ
     try {
@@ -105,11 +108,9 @@ async function askAI(userPrompt, extraContext = "") {
     return "Abe bhai/sir, network issue aa raha hai AI server se. Ek baar dubara message try karo!";
 }
 
-// ---------------------------------------------------
-// BOT EVENTS & LOGIC
-// ---------------------------------------------------
+// BOT EVENTS
 client.once('ready', () => {
-    console.log(`🤖 [HERRY CHAT BOT] Fully Online & Secure as ${client.user.tag}`);
+    console.log(`🤖 [HERRY CHAT BOT] GG Expert & Posya Vault Protection Active as ${client.user.tag}`);
     client.user.setActivity('HerryHacks VIP | Mention Me!', { type: 3 });
 });
 
@@ -138,6 +139,18 @@ client.on('messageCreate', async (message) => {
     // STRICT CHECK: ONLY REPLY WHEN BOT IS TAGGED
     if (!message.mentions.has(client.user)) return;
 
+    // 2. BLOCK UNCOMPILE & RAW SOURCE CODE REQUESTS
+    const isUncompileReq = UNCOMPILE_REQUESTS.some(kw => contentLower.includes(kw));
+    if (isUncompileReq) {
+        return message.reply(`Bakchodi mat kar!`);
+    }
+
+    // 3. CHECK FOR GC AND MONEY HACK REQUESTS
+    const isGCHackRequest = GC_HACK_KEYWORDS.some(kw => contentLower.includes(kw));
+    if (isGCHackRequest) {
+        return message.reply(`⚠️ **GC and MONEY hack unavailable.**`);
+    }
+
     // Authority Check
     const isHighAuthority = message.member.permissions.has(PermissionsBitField.Flags.Administrator) ||
                             message.member.permissions.has(PermissionsBitField.Flags.ManageGuild) ||
@@ -146,8 +159,9 @@ client.on('messageCreate', async (message) => {
     // Clean user prompt
     const cleanPrompt = message.content.replace(/<@!?\d+>/g, '').trim();
 
-    // 2. MAIN SERVER QUICK LINKS
-    if (message.guild.id === MAIN_SERVER_ID) {
+    // 4. MAIN SERVER QUICK LINKS (REQUIRES "LINK" IN USER MESSAGE)
+    const hasLinkWord = contentLower.includes('link') || contentLower.includes('links');
+    if (message.guild.id === MAIN_SERVER_ID && hasLinkWord) {
         for (const item of LINKS_MAP) {
             if (item.keywords.some(kw => contentLower.includes(kw))) {
                 const prefixGreeting = isHighAuthority ? "Hi Herry Sir / Boss! Ye raha aapka required link:" : "Abe oye, ye le link:";
@@ -156,7 +170,7 @@ client.on('messageCreate', async (message) => {
         }
     }
 
-    // 3. AI RESPONSES
+    // 5. AI RESPONSES WITH GG + POSYA SCRIPT KNOWLEDGE
     await message.channel.sendTyping();
 
     const contextInfo = `
@@ -166,11 +180,14 @@ client.on('messageCreate', async (message) => {
     `;
 
     const reply = await askAI(cleanPrompt || "Hello", contextInfo);
+    
+    // EXTRA SAFETY CHECK: Prevent raw url leak in response
+    if (reply.includes('raw.githubusercontent.com') || reply.includes('MainHerryPosya')) {
+        return message.reply(`Bakchodi mat kar!`);
+    }
+
     const safeResponse = reply.length > 1900 ? reply.substring(0, 1900) + "..." : reply;
     return message.reply(safeResponse);
 });
 
-// ---------------------------------------------------
-// BOT LOGIN
-// ---------------------------------------------------
 client.login(process.env.DISCORD_TOKEN);
