@@ -1,5 +1,5 @@
 // ===================================================
-// HERRY CHAT BOT - FIXED TAG ONLY RESPONSE
+// HERRY CHAT BOT - BULLETPROOF GROQ + OPENROUTER
 // ===================================================
 
 const { Client, GatewayIntentBits, Partials, PermissionsBitField } = require('discord.js');
@@ -37,32 +37,32 @@ const LINKS_MAP = [
 // Abusive Words Filter for Auto-Mod Timeout
 const BAD_WORDS = ['gali', 'mc', 'bc', 'bsdk', 'madarchod', 'bhenchod', 'chutiya', 'gand', 'laude', 'bhosdike'];
 
-// Game Guardian & System Prompt
+// System Knowledge Base
 const GG_SYSTEM_PROMPT = `
 You are HerryChatBot, the official smart AI assistant created by Herry.
 You possess complete knowledge of Game Guardian (GG), Virtual spaces (Multispace/Reversoqzz/Lulubox), Lua Scripting, and execution steps.
 
 Key Rules:
-1. Posya / Herry Lua Loader uses dynamic raw execution via GitHub ("https://raw.githubusercontent.com/urdushahzaib111-ctrl/Herry-Script/main/MainHerryPosya.lua")[span_0](start_span)[span_0](end_span).
+1. Posya / Herry Lua Loader uses dynamic raw execution via GitHub ("https://raw.githubusercontent.com/urdushahzaib111-ctrl/Herry-Script/main/MainHerryPosya.lua")[span_5](start_span)[span_5](end_span).
 2. For High Authority/Admins: Be extremely respectful. Address them as "Herry Sir" or "Boss".
 3. For normal users: Be friendly, casual, slight humor/bakchodi ("Abe oye", "Bhai sun"), but do NOT use explicit insults.
 4. Provide simple step-by-step guidance in Roman Urdu/English mix.
 `;
 
 // ---------------------------------------------------
-// MULTI-MODEL AI ENGINE
+// HYPER-RELIABLE AI ENGINE (GROQ INSTANT + OPENROUTER FREE ROUTER)
 // ---------------------------------------------------
 async function askAI(userPrompt, extraContext = "") {
     const fullSystemMessage = `${GG_SYSTEM_PROMPT}\nUser Context: ${extraContext}`;
 
-    // 1. TRY GROQ FIRST
+    // 1. PRIMARY: GROQ (llama-3.1-8b-instant - High Limit & Ultra Fast)
     try {
         const groqResponse = await groq.chat.completions.create({
             messages: [
                 { role: 'system', content: fullSystemMessage },
                 { role: 'user', content: userPrompt }
             ],
-            model: 'llama-3.3-70b-versatile',
+            model: 'llama-3.1-8b-instant',
             temperature: 0.7,
             max_tokens: 1000,
         });
@@ -71,43 +71,34 @@ async function askAI(userPrompt, extraContext = "") {
             return groqResponse.choices[0].message.content;
         }
     } catch (groqErr) {
-        console.error('⚠️ Groq Error:', groqErr.message || groqErr);
+        console.warn('⚠️ Groq Failed/Limited. Switching to OpenRouter Free Gateway...');
     }
 
-    // 2. OPENROUTER FALLBACK MODELS
-    const openRouterModels = [
-        'meta-llama/llama-3.3-70b-instruct:free',
-        'google/gemini-2.0-flash-lite-preview-02-05:free',
-        'deepseek/deepseek-r1:free',
-        'mistralai/mistral-7b-instruct:free'
-    ];
+    // 2. SECONDARY FALLBACK: OPENROUTER GATEWAY (openrouter/free)
+    try {
+        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+                'HTTP-Referer': 'https://railway.app',
+                'X-Title': 'HerryChatBot',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                model: 'openrouter/free',
+                messages: [
+                    { role: 'system', content: fullSystemMessage },
+                    { role: 'user', content: userPrompt }
+                ]
+            })
+        });
 
-    for (const model of openRouterModels) {
-        try {
-            const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-                    'HTTP-Referer': 'https://railway.app',
-                    'X-Title': 'HerryChatBot',
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    model: model,
-                    messages: [
-                        { role: 'system', content: fullSystemMessage },
-                        { role: 'user', content: userPrompt }
-                    ]
-                })
-            });
-
-            const data = await response.json();
-            if (data.choices && data.choices[0]?.message?.content) {
-                return data.choices[0].message.content;
-            }
-        } catch (err) {
-            console.error(`⚠️ OpenRouter Model ${model} failed:`, err.message || err);
+        const data = await response.json();
+        if (data.choices && data.choices[0]?.message?.content) {
+            return data.choices[0].message.content;
         }
+    } catch (openRouterErr) {
+        console.error('❌ OpenRouter Gateway Error:', openRouterErr);
     }
 
     return "Abe bhai/sir, network issue aa raha hai AI server se. Ek baar dubara message try karo!";
@@ -117,7 +108,7 @@ async function askAI(userPrompt, extraContext = "") {
 // BOT EVENTS & LOGIC
 // ---------------------------------------------------
 client.once('ready', () => {
-    console.log(`🤖 [HERRY CHAT BOT] Online & Ready as ${client.user.tag}`);
+    console.log(`🤖 [HERRY CHAT BOT] 100% Active as ${client.user.tag}`);
     client.user.setActivity('HerryHacks VIP | Mention Me!', { type: 3 });
 });
 
@@ -126,7 +117,7 @@ client.on('messageCreate', async (message) => {
 
     const contentLower = message.content.toLowerCase();
 
-    // 1. AUTO-MODERATION (ABUSE DETECTION - WORKS ALWAYS FOR SAFETY)
+    // 1. AUTO-MODERATION (ABUSE DETECTION)
     const containsAbuse = BAD_WORDS.some(word => contentLower.includes(word));
     if (containsAbuse) {
         try {
@@ -135,7 +126,7 @@ client.on('messageCreate', async (message) => {
                 await message.member.timeout(duration, 'Abuse / Gali Detection');
                 await message.reply(`⚠️ ${message.author} ko **Abuse** ki wajah se **2 Din** ka Timeout de diya gaya hai!`);
             } else {
-                await message.reply(`Abe oye ${message.author}, tameez se baat kar! (Admin level permission active, timeout bypass).`);
+                await message.reply(`Abe oye ${message.author}, tameez se baat kar! (Admin status enabled, cannot timeout).`);
             }
         } catch (err) {
             console.error("Timeout Error:", err);
@@ -143,18 +134,18 @@ client.on('messageCreate', async (message) => {
         return;
     }
 
-    // STRICT CHECK: ONLY REPLY IF THE BOT IS MENTIONED / TAGGED (@HerryChatBot)
+    // STRICT CHECK: ONLY REPLY WHEN BOT IS TAGGED/MENTIONED
     if (!message.mentions.has(client.user)) return;
 
-    // Role Authority Check
+    // Authority Check
     const isHighAuthority = message.member.permissions.has(PermissionsBitField.Flags.Administrator) ||
                             message.member.permissions.has(PermissionsBitField.Flags.ManageGuild) ||
                             message.member.roles.cache.size > 3;
 
-    // Clean user message (Remove the @bot tag text)
+    // Clean user prompt
     const cleanPrompt = message.content.replace(/<@!?\d+>/g, '').trim();
 
-    // 2. MAIN SERVER CHECK & QUICK LINK ROUTING
+    // 2. MAIN SERVER QUICK LINKS
     if (message.guild.id === MAIN_SERVER_ID) {
         for (const item of LINKS_MAP) {
             if (item.keywords.some(kw => contentLower.includes(kw))) {
@@ -164,7 +155,7 @@ client.on('messageCreate', async (message) => {
         }
     }
 
-    // 3. FULL SERVER AI CHATTING (ONLY ON TAG)
+    // 3. AI RESPONSES
     await message.channel.sendTyping();
 
     const contextInfo = `
