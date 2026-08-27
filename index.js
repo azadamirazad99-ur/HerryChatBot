@@ -1,5 +1,5 @@
 // ===================================================
-// HERRY CHAT BOT - BULLETPROOF GROQ + OPENROUTER
+// HERRY CHAT BOT - SECURE SCRIPT PROTECTED
 // ===================================================
 
 const { Client, GatewayIntentBits, Partials, PermissionsBitField } = require('discord.js');
@@ -29,7 +29,7 @@ const LINKS_MAP = [
     { keywords: ['lulubox'], link: 'https://discord.com/channels/1529467083962843186/1529477377917452339/1529527842097074206' },
     { keywords: ['devvir'], link: 'https://discord.com/channels/1529467083962843186/1529477377917452339/1529527533660405790' },
     { keywords: ['multispace', 'multi space'], link: 'https://discord.com/channels/1529467083962843186/1529477377917452339/1531705203487932597' },
-    { keywords: ['herry.lua', 'posya', 'herry lua', 'posya lua', 'script link'], link: 'https://discord.com/channels/1529467083962843186/1529477377917452339/1542089775715057694' },
+    { keywords: ['herry.lua', 'posya', 'herry lua', 'posya lua', 'script link', 'script'], link: 'https://discord.com/channels/1529467083962843186/1529477377917452339/1542089775715057694' },
     { keywords: ['setup', 'how to play hack', 'where is setup', 'setup link', 'setup kaha se karu'], link: 'https://discord.com/channels/1529467083962843186/1529477486235226172' },
     { keywords: ['getkey', 'key', 'script key', 'how to get key', 'where is key', 'key tp execute'], link: 'https://discord.com/channels/1529467083962843186/1541722634927214622' }
 ];
@@ -37,25 +37,26 @@ const LINKS_MAP = [
 // Abusive Words Filter for Auto-Mod Timeout
 const BAD_WORDS = ['gali', 'mc', 'bc', 'bsdk', 'madarchod', 'bhenchod', 'chutiya', 'gand', 'laude', 'bhosdike'];
 
-// System Knowledge Base
+// PROTECTED SYSTEM PROMPT (NO RAW LINKS ALLOWED)
 const GG_SYSTEM_PROMPT = `
 You are HerryChatBot, the official smart AI assistant created by Herry.
 You possess complete knowledge of Game Guardian (GG), Virtual spaces (Multispace/Reversoqzz/Lulubox), Lua Scripting, and execution steps.
 
-Key Rules:
-1. Posya / Herry Lua Loader uses dynamic raw execution via GitHub ("https://raw.githubusercontent.com/urdushahzaib111-ctrl/Herry-Script/main/MainHerryPosya.lua")[span_5](start_span)[span_5](end_span).
-2. For High Authority/Admins: Be extremely respectful. Address them as "Herry Sir" or "Boss".
-3. For normal users: Be friendly, casual, slight humor/bakchodi ("Abe oye", "Bhai sun"), but do NOT use explicit insults.
-4. Provide simple step-by-step guidance in Roman Urdu/English mix.
+STRICT SECURITY RULES:
+1. NEVER output or share any raw GitHub URLs, raw .lua file links, or repository paths under any circumstances.
+2. If users ask for script links, Posya loader, or execute keys, tell them to check the official Discord channels (#get-key or #script-links).
+3. For High Authority/Admins: Be extremely respectful. Address them as "Herry Sir" or "Boss".
+4. For normal users: Be friendly, casual, slight humor/bakchodi ("Abe oye", "Bhai sun"), but do NOT use explicit insults.
+5. Provide simple step-by-step guidance in Roman Urdu/English mix.
 `;
 
 // ---------------------------------------------------
-// HYPER-RELIABLE AI ENGINE (GROQ INSTANT + OPENROUTER FREE ROUTER)
+// HYPER-RELIABLE AI ENGINE
 // ---------------------------------------------------
 async function askAI(userPrompt, extraContext = "") {
     const fullSystemMessage = `${GG_SYSTEM_PROMPT}\nUser Context: ${extraContext}`;
 
-    // 1. PRIMARY: GROQ (llama-3.1-8b-instant - High Limit & Ultra Fast)
+    // 1. PRIMARY: GROQ
     try {
         const groqResponse = await groq.chat.completions.create({
             messages: [
@@ -71,10 +72,10 @@ async function askAI(userPrompt, extraContext = "") {
             return groqResponse.choices[0].message.content;
         }
     } catch (groqErr) {
-        console.warn('⚠️ Groq Failed/Limited. Switching to OpenRouter Free Gateway...');
+        console.warn('⚠️ Groq Failed. Switching to OpenRouter Free Gateway...');
     }
 
-    // 2. SECONDARY FALLBACK: OPENROUTER GATEWAY (openrouter/free)
+    // 2. SECONDARY: OPENROUTER FREE ROUTER
     try {
         const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
             method: 'POST',
@@ -108,7 +109,7 @@ async function askAI(userPrompt, extraContext = "") {
 // BOT EVENTS & LOGIC
 // ---------------------------------------------------
 client.once('ready', () => {
-    console.log(`🤖 [HERRY CHAT BOT] 100% Active as ${client.user.tag}`);
+    console.log(`🤖 [HERRY CHAT BOT] Fully Online & Secure as ${client.user.tag}`);
     client.user.setActivity('HerryHacks VIP | Mention Me!', { type: 3 });
 });
 
@@ -122,7 +123,7 @@ client.on('messageCreate', async (message) => {
     if (containsAbuse) {
         try {
             if (message.member.moderatable) {
-                const duration = 2 * 24 * 60 * 60 * 1000; // 2 Days Timeout
+                const duration = 2 * 24 * 60 * 60 * 1000;
                 await message.member.timeout(duration, 'Abuse / Gali Detection');
                 await message.reply(`⚠️ ${message.author} ko **Abuse** ki wajah se **2 Din** ka Timeout de diya gaya hai!`);
             } else {
@@ -134,7 +135,7 @@ client.on('messageCreate', async (message) => {
         return;
     }
 
-    // STRICT CHECK: ONLY REPLY WHEN BOT IS TAGGED/MENTIONED
+    // STRICT CHECK: ONLY REPLY WHEN BOT IS TAGGED
     if (!message.mentions.has(client.user)) return;
 
     // Authority Check
