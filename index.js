@@ -1,5 +1,5 @@
 // ===================================================
-// HERRY CHAT BOT - GROQ + OPENROUTER SYSTEM
+// HERRY CHAT BOT - FIXED MULTI-AI ENGINE
 // ===================================================
 
 const { Client, GatewayIntentBits, Partials, PermissionsBitField } = require('discord.js');
@@ -16,7 +16,7 @@ const client = new Client({
     partials: [Partials.Channel, Partials.Message, Partials.GuildMember]
 });
 
-// Initialize Groq Client
+// Initialize Groq
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || '' });
 
 const MAIN_SERVER_ID = process.env.MAIN_SERVER_ID || '1529467083962843186';
@@ -50,12 +50,12 @@ Key Rules:
 `;
 
 // ---------------------------------------------------
-// GROQ + OPENROUTER FALLBACK ENGINE
+// RELIABLE MULTI-MODEL AI ENGINE
 // ---------------------------------------------------
 async function askAI(userPrompt, extraContext = "") {
     const fullSystemMessage = `${GG_SYSTEM_PROMPT}\nUser Context: ${extraContext}`;
 
-    // 1. TRY GROQ FIRST (Ultra Fast)
+    // 1. TRY GROQ FIRST (PRIMARY MODEL)
     try {
         const groqResponse = await groq.chat.completions.create({
             messages: [
@@ -67,46 +67,57 @@ async function askAI(userPrompt, extraContext = "") {
             max_tokens: 1000,
         });
 
-        if (groqResponse.choices[0]?.message?.content) {
+        if (groqResponse.choices && groqResponse.choices[0]?.message?.content) {
             return groqResponse.choices[0].message.content;
         }
     } catch (groqErr) {
-        console.warn('⚠️ Groq API Failed. Switching to OpenRouter Fallback...');
+        console.error('⚠️ Groq Error:', groqErr.message || groqErr);
     }
 
-    // 2. FALLBACK TO OPENROUTER (If Groq fails)
-    try {
-        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                model: 'meta-llama/llama-3.1-8b-instruct:free',
-                messages: [
-                    { role: 'system', content: fullSystemMessage },
-                    { role: 'user', content: userPrompt }
-                ]
-            })
-        });
+    // 2. OPENROUTER FALLBACK MODELS LIST
+    const openRouterModels = [
+        'meta-llama/llama-3.3-70b-instruct:free',
+        'google/gemini-2.0-flash-lite-preview-02-05:free',
+        'deepseek/deepseek-r1:free',
+        'mistralai/mistral-7b-instruct:free'
+    ];
 
-        const data = await response.json();
-        if (data.choices && data.choices[0]?.message?.content) {
-            return data.choices[0].message.content;
+    for (const model of openRouterModels) {
+        try {
+            const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+                    'HTTP-Referer': 'https://railway.app',
+                    'X-Title': 'HerryChatBot',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    model: model,
+                    messages: [
+                        { role: 'system', content: fullSystemMessage },
+                        { role: 'user', content: userPrompt }
+                    ]
+                })
+            });
+
+            const data = await response.json();
+            if (data.choices && data.choices[0]?.message?.content) {
+                return data.choices[0].message.content;
+            }
+        } catch (err) {
+            console.error(`⚠️ OpenRouter Model ${model} failed:`, err.message || err);
         }
-    } catch (openRouterErr) {
-        console.error('❌ OpenRouter Error:', openRouterErr);
     }
 
-    return "⚡ Server high load par hai. Thodi der baad dubara message karein!";
+    return "Abe bhai/sir, network issue aa raha hai AI server se. Ek baar dubara message try karo!";
 }
 
 // ---------------------------------------------------
 // BOT EVENTS & LOGIC
 // ---------------------------------------------------
 client.once('ready', () => {
-    console.log(`🤖 [HERRY CHAT BOT] Powered by Groq + OpenRouter | Online as ${client.user.tag}`);
+    console.log(`🤖 [HERRY CHAT BOT] Fully Online as ${client.user.tag}`);
     client.user.setActivity('HerryHacks VIP | AI Active', { type: 3 });
 });
 
@@ -120,7 +131,7 @@ client.on('messageCreate', async (message) => {
     if (containsAbuse) {
         try {
             if (message.member.moderatable) {
-                const duration = 2 * 24 * 60 * 60 * 1000; // 2 Days Timeout
+                const duration = 2 * 24 * 60 * 60 * 1000;
                 await message.member.timeout(duration, 'Abuse / Gali Detection');
                 await message.reply(`⚠️ ${message.author} ko **Abuse** ki wajah se **2 Din** ka Timeout de diya gaya hai!`);
             } else {
@@ -147,7 +158,7 @@ client.on('messageCreate', async (message) => {
         }
     }
 
-    // 3. FULL SERVER AI CHATTING VIA GROQ + OPENROUTER
+    // 3. FULL SERVER AI CHATTING
     if (message.mentions.has(client.user) || message.channel.type === 0) {
         await message.channel.sendTyping();
 
