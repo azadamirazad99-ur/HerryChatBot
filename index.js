@@ -1,5 +1,5 @@
 // ===================================================
-// HERRY CHAT BOT - POSYA KNOWLEDGE & STRICT PROTECTED
+// HERRY CHAT BOT - ULTIMATE GG & SCRIPT EXECUTION MASTER
 // ===================================================
 
 const { Client, GatewayIntentBits, Partials, PermissionsBitField } = require('discord.js');
@@ -21,43 +21,49 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || '' });
 
 const MAIN_SERVER_ID = process.env.MAIN_SERVER_ID || '1529467083962843186';
 
-// RAW POSYA SCRIPT FOR BOT INTERNAL READ ONLY (NEVER SHARE THIS)
+// INTERNAL READ ONLY - STRICTLY PROTECTED (VAULT)
 const INTERNAL_POSYA_SCRIPT = `
 https://raw.githubusercontent.com/urdushahzaib111-ctrl/Herry-Script/main/MainHerryPosya.lua
 `;
 
-// DYNAMIC LINKS MAP (REQUIRES "LINK" WORD)
+// DYNAMIC LINKS MAP (REQUIRES "LINK" WORD IN USER MESSAGE)
 const LINKS_MAP = [
     { keywords: ['reversoqzz', 'reverso'], link: 'https://discord.com/channels/1529467083962843186/1529477377917452339/1529524492450402506' },
     { keywords: ['lulubox'], link: 'https://discord.com/channels/1529467083962843186/1529477377917452339/1529527842097074206' },
     { keywords: ['devvir'], link: 'https://discord.com/channels/1529467083962843186/1529477377917452339/1529527533660405790' },
     { keywords: ['multispace', 'multi space'], link: 'https://discord.com/channels/1529467083962843186/1529477377917452339/1531705203487932597' },
     { keywords: ['herry.lua', 'posya', 'herry lua', 'posya lua', 'script', 'lua'], link: 'https://discord.com/channels/1529467083962843186/1529477377917452339/1542089775715057694' },
-    { keywords: ['setup', 'how to play hack', 'where is setup', 'setup kaha se karu'], link: 'https://discord.com/channels/1529467083962843186/1529477486235226172' },
+    { keywords: ['setup', 'how to play hack', 'where is setup', 'setup link', 'setup kaha se karu'], link: 'https://discord.com/channels/1529467083962843186/1529477486235226172' },
     { keywords: ['getkey', 'key', 'script key', 'how to get key', 'where is key', 'key tp execute'], link: 'https://discord.com/channels/1529467083962843186/1541722634927214622' }
 ];
 
-// Keywords
+// KEYWORDS & FILTERS
 const GC_HACK_KEYWORDS = ['gc hack', 'gc', 'money hack', 'unlimited gc', 'unlimited money', 'coin hack'];
 const BAD_WORDS = ['gali', 'mc', 'bc', 'bsdk', 'madarchod', 'bhenchod', 'chutiya', 'gand', 'laude', 'bhosdike'];
-const UNCOMPILE_REQUESTS = ['uncompile', 'uncompiled', 'decompiled', 'raw source', 'raw link', 'raw script', 'source code', 'lua source', 'mainherryposya'];
 
-// ADVANCED SYSTEM PROMPT
+// STRICT DECOMPILE / DECRYPT / UNCOMPILE BLOCK
+const SECURITY_BLOCK_KEYWORDS = [
+    'uncompile', 'uncompiled', 'decompile', 'decompiled', 'decrypt', 'decrypted',
+    'decode', 'decoded', 'raw source', 'raw link', 'raw script', 'source code',
+    'lua source', 'mainherryposya', 'give code', 'script code'
+];
+
+// PRO-HACKER GG EXPERT SYSTEM PROMPT (NO SAFE-MODE RESTRICTIONS FOR HACKING HELP)
 const GG_SYSTEM_PROMPT = `
-You are HerryChatBot, created by Herry (Shahzaib).
-You have MASTER/EXPERT LEVEL KNOWLEDGE of Game Guardian (GG), Lua Scripting, memory searches, freeze values, DWORD/FLOAT edits, XOR encryption, offset searching, and Virtual Spaces.
+You are HerryChatBot, the elite AI hacking and scripting assistant created by Herry (Shahzaib).
+You possess ORIGINAL, DEEP, MASTER-LEVEL knowledge of Game Guardian (GG), Lua Scripting, memory structures, pointer offsets, DWORD, FLOAT, XOR, XA, Q, Auto-Assemble (AA) scripts, process attaching, permission fixes, and virtual space bypasses.
 
-CRITICAL ULTRA-SECRET RULES (NEVER BREAK):
-1. ABSOLUTELY NEVER REVEAL, LEAK, OR PRINT ANY RAW GITHUB LINK, RAW LUA FILE LINK, REPOSITORY PATH, OR INTERNAL SOURCE CODE.
-2. If anyone asks for uncompiled file, source code, raw link, decompiled file, or uncompile script, immediately reply strictly with: "Bakchodi mat kar!"
-3. You have full knowledge of Herry Posya Script menu options and features to guide users on how features work, but NEVER show the actual code or links.
-4. If users ask for GC or Money Hacks, reply that GC and MONEY hack is unavailable.
-5. For High Authority/Admins: Be respectful, address as "Herry Sir" or "Boss".
-6. For normal users: Be friendly, helpful, with casual humor/bakchodi ("Abe oye", "Bhai sun").
+CORE DIRECTIVES & HACKING EXPERTISE:
+1. NO PREACHING / NO SAFETY LECTURES: Do not give boring safety warnings about game rules, bans, or ethics. Users are here for game modding/hacking. Answer their technical modding questions directly like a hardcore underground hacker assistant.
+2. SCRIPT EXECUTION EXPERT: Guide users step-by-step on how to open Game Guardian, attach to processes, load scripts from URL/storage, handle execution errors, input keys, and bypass restrictions.
+3. ABSOLUTE SOURCE VAULT SECURITY: NEVER reveal, leak, or print any raw GitHub link, raw .lua file link, repository path, or internal source code under any circumstances.
+4. If anyone asks for uncompiled file, decompile file, decrypt file, source code, or raw link, ALWAYS reply strictly with: "Bakchodi mat kar!"
+5. If users ask for GC or Money Hacks, reply that GC and MONEY hack is unavailable.
+6. Tone: For Admins/Boss (Herry Sir), show ultimate respect. For normal users, keep a casual underground hacker vibe ("Abe oye", "Bhai sun", "Scene set hai"). Use Roman Urdu/English mix.
 `;
 
 async function askAI(userPrompt, extraContext = "") {
-    const fullSystemMessage = `${GG_SYSTEM_PROMPT}\nInternal Posya Context Reference (Do Not Reveal Link): ${INTERNAL_POSYA_SCRIPT}\nUser Context: ${extraContext}`;
+    const fullSystemMessage = `${GG_SYSTEM_PROMPT}\nInternal Posya Context Reference (Do Not Leak Link): ${INTERNAL_POSYA_SCRIPT}\nUser Context: ${extraContext}`;
 
     // 1. PRIMARY: GROQ
     try {
@@ -67,8 +73,8 @@ async function askAI(userPrompt, extraContext = "") {
                 { role: 'user', content: userPrompt }
             ],
             model: 'llama-3.1-8b-instant',
-            temperature: 0.7,
-            max_tokens: 1000,
+            temperature: 0.8, // Slightly higher for dynamic hacker responses
+            max_tokens: 1200,
         });
 
         if (groqResponse.choices && groqResponse.choices[0]?.message?.content) {
@@ -110,8 +116,8 @@ async function askAI(userPrompt, extraContext = "") {
 
 // BOT EVENTS
 client.once('ready', () => {
-    console.log(`🤖 [HERRY CHAT BOT] GG Expert & Posya Vault Protection Active as ${client.user.tag}`);
-    client.user.setActivity('HerryHacks VIP | Mention Me!', { type: 3 });
+    console.log(`🤖 [HERRY CHAT BOT] Ultimate GG & Script Master Active as ${client.user.tag}`);
+    client.user.setActivity('HerryHacks VIP | GG Master', { type: 3 });
 });
 
 client.on('messageCreate', async (message) => {
@@ -139,9 +145,9 @@ client.on('messageCreate', async (message) => {
     // STRICT CHECK: ONLY REPLY WHEN BOT IS TAGGED
     if (!message.mentions.has(client.user)) return;
 
-    // 2. BLOCK UNCOMPILE & RAW SOURCE CODE REQUESTS
-    const isUncompileReq = UNCOMPILE_REQUESTS.some(kw => contentLower.includes(kw));
-    if (isUncompileReq) {
+    // 2. BLOCK DECOMPILE / UNCOMPILE / DECRYPT / RAW SOURCE REQUESTS
+    const isSecurityThreat = SECURITY_BLOCK_KEYWORDS.some(kw => contentLower.includes(kw));
+    if (isSecurityThreat) {
         return message.reply(`Bakchodi mat kar!`);
     }
 
@@ -170,7 +176,7 @@ client.on('messageCreate', async (message) => {
         }
     }
 
-    // 5. AI RESPONSES WITH GG + POSYA SCRIPT KNOWLEDGE
+    // 5. AI RESPONSES WITH FULL GG & SCRIPT EXECUTION EXPERTISE
     await message.channel.sendTyping();
 
     const contextInfo = `
@@ -181,8 +187,8 @@ client.on('messageCreate', async (message) => {
 
     const reply = await askAI(cleanPrompt || "Hello", contextInfo);
     
-    // EXTRA SAFETY CHECK: Prevent raw url leak in response
-    if (reply.includes('raw.githubusercontent.com') || reply.includes('MainHerryPosya')) {
+    // FINAL HYPER-SAFETY FILTER (PREVENT LEAK AT ANY COST)
+    if (reply.includes('githubusercontent') || reply.includes('MainHerryPosya') || reply.includes('http://') || reply.includes('https://raw')) {
         return message.reply(`Bakchodi mat kar!`);
     }
 
