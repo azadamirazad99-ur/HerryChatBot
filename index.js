@@ -1,5 +1,5 @@
 // ===================================================
-// HERRY CHAT BOT - FIXED MULTI-AI ENGINE
+// HERRY CHAT BOT - FIXED TAG ONLY RESPONSE
 // ===================================================
 
 const { Client, GatewayIntentBits, Partials, PermissionsBitField } = require('discord.js');
@@ -50,12 +50,12 @@ Key Rules:
 `;
 
 // ---------------------------------------------------
-// RELIABLE MULTI-MODEL AI ENGINE
+// MULTI-MODEL AI ENGINE
 // ---------------------------------------------------
 async function askAI(userPrompt, extraContext = "") {
     const fullSystemMessage = `${GG_SYSTEM_PROMPT}\nUser Context: ${extraContext}`;
 
-    // 1. TRY GROQ FIRST (PRIMARY MODEL)
+    // 1. TRY GROQ FIRST
     try {
         const groqResponse = await groq.chat.completions.create({
             messages: [
@@ -74,7 +74,7 @@ async function askAI(userPrompt, extraContext = "") {
         console.error('⚠️ Groq Error:', groqErr.message || groqErr);
     }
 
-    // 2. OPENROUTER FALLBACK MODELS LIST
+    // 2. OPENROUTER FALLBACK MODELS
     const openRouterModels = [
         'meta-llama/llama-3.3-70b-instruct:free',
         'google/gemini-2.0-flash-lite-preview-02-05:free',
@@ -117,8 +117,8 @@ async function askAI(userPrompt, extraContext = "") {
 // BOT EVENTS & LOGIC
 // ---------------------------------------------------
 client.once('ready', () => {
-    console.log(`🤖 [HERRY CHAT BOT] Fully Online as ${client.user.tag}`);
-    client.user.setActivity('HerryHacks VIP | AI Active', { type: 3 });
+    console.log(`🤖 [HERRY CHAT BOT] Online & Ready as ${client.user.tag}`);
+    client.user.setActivity('HerryHacks VIP | Mention Me!', { type: 3 });
 });
 
 client.on('messageCreate', async (message) => {
@@ -126,12 +126,12 @@ client.on('messageCreate', async (message) => {
 
     const contentLower = message.content.toLowerCase();
 
-    // 1. AUTO-MODERATION (ABUSE DETECTION & 2-DAY TIMEOUT)
+    // 1. AUTO-MODERATION (ABUSE DETECTION - WORKS ALWAYS FOR SAFETY)
     const containsAbuse = BAD_WORDS.some(word => contentLower.includes(word));
     if (containsAbuse) {
         try {
             if (message.member.moderatable) {
-                const duration = 2 * 24 * 60 * 60 * 1000;
+                const duration = 2 * 24 * 60 * 60 * 1000; // 2 Days Timeout
                 await message.member.timeout(duration, 'Abuse / Gali Detection');
                 await message.reply(`⚠️ ${message.author} ko **Abuse** ki wajah se **2 Din** ka Timeout de diya gaya hai!`);
             } else {
@@ -143,10 +143,16 @@ client.on('messageCreate', async (message) => {
         return;
     }
 
+    // STRICT CHECK: ONLY REPLY IF THE BOT IS MENTIONED / TAGGED (@HerryChatBot)
+    if (!message.mentions.has(client.user)) return;
+
     // Role Authority Check
     const isHighAuthority = message.member.permissions.has(PermissionsBitField.Flags.Administrator) ||
                             message.member.permissions.has(PermissionsBitField.Flags.ManageGuild) ||
                             message.member.roles.cache.size > 3;
+
+    // Clean user message (Remove the @bot tag text)
+    const cleanPrompt = message.content.replace(/<@!?\d+>/g, '').trim();
 
     // 2. MAIN SERVER CHECK & QUICK LINK ROUTING
     if (message.guild.id === MAIN_SERVER_ID) {
@@ -158,20 +164,18 @@ client.on('messageCreate', async (message) => {
         }
     }
 
-    // 3. FULL SERVER AI CHATTING
-    if (message.mentions.has(client.user) || message.channel.type === 0) {
-        await message.channel.sendTyping();
+    // 3. FULL SERVER AI CHATTING (ONLY ON TAG)
+    await message.channel.sendTyping();
 
-        const contextInfo = `
-        Server Name: ${message.guild.name}
-        User Name: ${message.author.username}
-        User Authority: ${isHighAuthority ? 'High Authority / Boss / Admin' : 'Normal User'}
-        `;
+    const contextInfo = `
+    Server Name: ${message.guild.name}
+    User Name: ${message.author.username}
+    User Authority: ${isHighAuthority ? 'High Authority / Boss / Admin' : 'Normal User'}
+    `;
 
-        const reply = await askAI(message.content, contextInfo);
-        const safeResponse = reply.length > 1900 ? reply.substring(0, 1900) + "..." : reply;
-        return message.reply(safeResponse);
-    }
+    const reply = await askAI(cleanPrompt || "Hello", contextInfo);
+    const safeResponse = reply.length > 1900 ? reply.substring(0, 1900) + "..." : reply;
+    return message.reply(safeResponse);
 });
 
 // ---------------------------------------------------
