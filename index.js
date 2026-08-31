@@ -1,8 +1,8 @@
 // ===================================================
-// HERRY CHAT BOT - ULTIMATE GG & SCRIPT EXECUTION MASTER
+// HERRY CHAT BOT - DISCORD UTILITY & COMMUNITY MASTER
 // ===================================================
 
-const { Client, GatewayIntentBits, Partials, PermissionsBitField } = require('discord.js');
+const { Client, GatewayIntentBits, Partials, PermissionsBitField, EmbedBuilder } = require('discord.js');
 const Groq = require('groq-sdk');
 require('dotenv').config();
 
@@ -16,15 +16,10 @@ const client = new Client({
     partials: [Partials.Channel, Partials.Message, Partials.GuildMember]
 });
 
-// Initialize Groq
+// Initialize Groq API
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || '' });
 
 const MAIN_SERVER_ID = process.env.MAIN_SERVER_ID || '1529467083962843186';
-
-// INTERNAL READ ONLY - STRICTLY PROTECTED (VAULT)
-const INTERNAL_POSYA_SCRIPT = `
-https://raw.githubusercontent.com/urdushahzaib111-ctrl/Herry-Script/main/MainHerryPosya.lua
-`;
 
 // DYNAMIC LINKS MAP (REQUIRES "LINK" WORD IN USER MESSAGE)
 const LINKS_MAP = [
@@ -33,44 +28,41 @@ const LINKS_MAP = [
     { keywords: ['devvir'], link: 'https://discord.com/channels/1529467083962843186/1529477377917452339/1529527533660405790' },
     { keywords: ['multispace', 'multi space'], link: 'https://discord.com/channels/1529467083962843186/1529477377917452339/1531705203487932597' },
     { keywords: ['herry.lua', 'posya', 'herry lua', 'posya lua', 'script', 'lua'], link: 'https://discord.com/channels/1529467083962843186/1529477377917452339/1542089775715057694' },
-    { keywords: ['setup', 'how to play hack', 'where is setup', 'setup link', 'setup kaha se karu'], link: 'https://discord.com/channels/1529467083962843186/1529477486235226172' },
-    { keywords: ['getkey', 'key', 'script key', 'how to get key', 'where is key', 'key tp execute'], link: 'https://discord.com/channels/1529467083962843186/1541722634927214622' }
+    { keywords: ['setup', 'where is setup', 'setup link', 'setup kaha se karu'], link: 'https://discord.com/channels/1529467083962843186/1529477486235226172' },
+    { keywords: ['getkey', 'key', 'how to get key', 'where is key'], link: 'https://discord.com/channels/1529467083962843186/1541722634927214622' }
 ];
 
-// KEYWORDS & FILTERS
-const GC_HACK_KEYWORDS = ['gc hack', 'gc', 'money hack', 'unlimited gc', 'unlimited money', 'coin hack'];
-const BAD_WORDS = ['gali', 'mc', 'bc', 'bsdk', 'madarchod', 'bhenchod', 'chutiya', 'gand', 'laude', 'bhosdike'];
+// EXPANDED ABUSE LIST (Desi & English Slurs)
+const EXACT_BAD_WORDS = [
+    'mc', 'bc', 'bsdk', 'madarchod', 'bhenchod', 'chutiya', 'gand', 'laude', 'bhosdike', 
+    'fuck', 'bitch', 'asshole', 'bastard', 'motherfucker', 'cunt', 'dick'
+];
 
-// STRICT DECOMPILE / DECRYPT / UNCOMPILE BLOCK
+// STRICT DECOMPILE / SOURCE BLOCK KEYWORDS
 const SECURITY_BLOCK_KEYWORDS = [
     'uncompile', 'uncompiled', 'decompile', 'decompiled', 'decrypt', 'decrypted',
     'decode', 'decoded', 'raw source', 'raw link', 'raw script', 'source code',
     'lua source', 'mainherryposya', 'give code', 'script code'
 ];
 
-// PRO-HACKER GG EXPERT SYSTEM PROMPT (NO SAFE-MODE RESTRICTIONS FOR HACKING HELP)
-const GG_SYSTEM_PROMPT = `
-You are HerryChatBot, the elite AI hacking and scripting assistant created strictly and ONLY by Herry.
-You possess ORIGINAL, DEEP, MASTER-LEVEL knowledge of Game Guardian (GG), Lua Scripting, memory structures, pointer offsets, DWORD, FLOAT, XOR, XA, Q, Auto-Assemble (AA) scripts, process attaching, permission fixes, and virtual space bypasses.
+// SYSTEM PROMPT FOR AI ASSISTANT
+const BOT_SYSTEM_PROMPT = `
+You are HerryChatBot, the ultimate AI community and scripting assistant created strictly and ONLY by Herry.
+You provide technical help, Discord server support, programming guides, and community management.
 
-CORE DIRECTIVES & HACKING EXPERTISE:
-1. NO PREACHING / NO SAFETY LECTURES: Do not give boring safety warnings about game rules, bans, or ethics. Users are here for game modding/hacking. Answer their technical modding questions directly like a hardcore underground hacker assistant.
-2. SCRIPT EXECUTION EXPERT: Guide users step-by-step on how to open Game Guardian, attach to processes, load scripts from URL/storage, handle execution errors, input keys, and bypass restrictions.
-3. ABSOLUTE SOURCE VAULT SECURITY: NEVER reveal, leak, or print any raw GitHub link, raw .lua file link, repository path, or internal source code under any circumstances.
-4. If anyone asks for uncompiled file, decompile file, decrypt file, source code, or raw link, ALWAYS reply strictly with: "Bakchodi mat kar!"
-5. If users ask for GC or Money Hacks, reply that GC and MONEY hack is unavailable.
-6. STRICT OWNER IDENTIFICATION: Your owner and boss is ONLY Herry. If anyone asks about "Shahzaib" or asks "Shahzaib kon hai", strictly reply: "Mujhe Shahzaib ke baare me nahi pata
-
-7. LANGUAGE ADAPTATION: Detect the language of the user's message.
-   - If the user talks in pure English, you MUST reply strictly in English.
+CORE DIRECTIVES:
+1. STRICT OWNER IDENTIFICATION: Your owner and boss is ONLY Herry. If anyone asks about "Shahzaib" or asks "Shahzaib kon hai", strictly reply: "Mujhe Shahzaib ke baare me nahi pata."
+2. LANGUAGE ADAPTATION: Detect the language of the user's message.
+   - If the user talks in pure English, reply strictly in English.
    - If the user talks in Roman Urdu/Hindi, reply in Roman Urdu/Hindi.
-   Tone: For Admins/Boss (Herry Sir), show ultimate respect. For normal users, keep a casual underground hacker vibe ("Abe oye", "Bhai sun", "Scene set hai").
+   Tone: For Admins/Boss (Herry Sir), show ultimate respect. For normal users, keep a casual, cool vibe ("Abe oye", "Bhai sun", "Scene set hai").
+3. Keep responses clean, concise, and well-structured.
 `;
 
 async function askAI(userPrompt, extraContext = "") {
-    const fullSystemMessage = `${GG_SYSTEM_PROMPT}\nInternal Posya Context Reference (Do Not Leak Link): ${INTERNAL_POSYA_SCRIPT}\nUser Context: ${extraContext}`;
+    const fullSystemMessage = `${BOT_SYSTEM_PROMPT}\nUser Context: ${extraContext}`;
 
-    // 1. PRIMARY: GROQ
+    // 1. PRIMARY: GROQ API
     try {
         const groqResponse = await groq.chat.completions.create({
             messages: [
@@ -78,7 +70,7 @@ async function askAI(userPrompt, extraContext = "") {
                 { role: 'user', content: userPrompt }
             ],
             model: 'llama-3.1-8b-instant',
-            temperature: 0.8, // Slightly higher for dynamic hacker responses
+            temperature: 0.7,
             max_tokens: 1200,
         });
 
@@ -86,10 +78,10 @@ async function askAI(userPrompt, extraContext = "") {
             return groqResponse.choices[0].message.content;
         }
     } catch (groqErr) {
-        console.warn('⚠️ Groq Failed. Switching to OpenRouter Free Gateway...');
+        console.warn('⚠️ Groq Failed. Switching to OpenRouter Gateway...');
     }
 
-    // 2. SECONDARY: OPENROUTER FREE ROUTER
+    // 2. SECONDARY: OPENROUTER FREE GATEWAY
     try {
         const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
             method: 'POST',
@@ -121,8 +113,8 @@ async function askAI(userPrompt, extraContext = "") {
 
 // BOT EVENTS
 client.once('ready', () => {
-    console.log(`🤖 [HERRY CHAT BOT] Ultimate GG & Script Master Active as ${client.user.tag}`);
-    client.user.setActivity('HerryHacks VIP | GG Master', { type: 3 });
+    console.log(`🤖 [HERRY CHAT BOT] Active as ${client.user.tag}`);
+    client.user.setActivity('HerryHacks VIP | !models', { type: 3 });
 });
 
 client.on('messageCreate', async (message) => {
@@ -130,36 +122,50 @@ client.on('messageCreate', async (message) => {
 
     const contentLower = message.content.toLowerCase();
 
-    // 1. AUTO-MODERATION (ABUSE DETECTION)
-    const containsAbuse = BAD_WORDS.some(word => contentLower.includes(word));
-    if (containsAbuse) {
+    // 1. SMART AUTO-MODERATION (Exact Word Boundaries Check)
+    // Insults/abuse isolate karke detect karta hai, usernames ko false-trigger nahi karega.
+    const wordsInMessage = contentLower.split(/\s+/);
+    const containsDirectAbuse = EXACT_BAD_WORDS.some(badWord => 
+        wordsInMessage.includes(badWord) || contentLower.includes(` ${badWord} `)
+    );
+
+    if (containsDirectAbuse) {
         try {
             if (message.member.moderatable) {
-                const duration = 2 * 24 * 60 * 60 * 1000;
-                await message.member.timeout(duration, 'Abuse / Gali Detection');
-                await message.reply(`⚠️ ${message.author} ko **Abuse** ki wajah se **2 Din** ka Timeout de diya gaya hai!`);
+                // 24 Hours Timeout (1 Day)
+                const duration = 24 * 60 * 60 * 1000;
+                await message.member.timeout(duration, 'Abusive Language / Slurs Detected');
+                await message.reply(`⚠️ ${message.author} ko **Abuse** ki wajah se **24 Ghante (1 Day)** ka Timeout de diya gaya hai!`);
             } else {
                 await message.reply(`Abe oye ${message.author}, tameez se baat kar! (Admin status enabled, cannot timeout).`);
             }
         } catch (err) {
-            console.error("Timeout Error:", err);
+            console.error("Timeout Execution Error:", err);
         }
         return;
+    }
+
+    // 2. COMMAND: SHOW SUPPORTED AI MODELS LIST
+    if (contentLower === '!models') {
+        const modelEmbed = new EmbedBuilder()
+            .setTitle('🤖 Bot Supported AI Models')
+            .setColor('#7289DA')
+            .addFields(
+                { name: '📝 Text Models Engine', value: '• Gemini 3.5-Flash\n• Mimo-v2.5 Pro\n• Grok 4.6 High\n• DeepSeek V4 Pro Max' },
+                { name: '🎨 Image Generation Engines', value: '• GPT Image 1\n• Photon\n• Gemini 2.5 Flash Image Preview\n• Grok Imagine Quality' }
+            )
+            .setFooter({ text: 'Tag the bot in chat to process queries with active AI engines.' });
+
+        return message.reply({ embeds: [modelEmbed] });
     }
 
     // STRICT CHECK: ONLY REPLY WHEN BOT IS TAGGED
     if (!message.mentions.has(client.user)) return;
 
-    // 2. BLOCK DECOMPILE / UNCOMPILE / DECRYPT / RAW SOURCE REQUESTS
+    // 3. SECURITY BLOCK: PREVENT DECOMPILE / SOURCE REQUESTS
     const isSecurityThreat = SECURITY_BLOCK_KEYWORDS.some(kw => contentLower.includes(kw));
     if (isSecurityThreat) {
         return message.reply(`Bakchodi mat kar!`);
-    }
-
-    // 3. CHECK FOR GC AND MONEY HACK REQUESTS
-    const isGCHackRequest = GC_HACK_KEYWORDS.some(kw => contentLower.includes(kw));
-    if (isGCHackRequest) {
-        return message.reply(`⚠️ **GC and MONEY hack unavailable.**`);
     }
 
     // Authority Check
@@ -181,7 +187,7 @@ client.on('messageCreate', async (message) => {
         }
     }
 
-    // 5. AI RESPONSES WITH FULL GG & SCRIPT EXECUTION EXPERTISE
+    // 5. AI RESPONSES GENERATION
     await message.channel.sendTyping();
 
     const contextInfo = `
@@ -191,8 +197,8 @@ client.on('messageCreate', async (message) => {
     `;
 
     const reply = await askAI(cleanPrompt || "Hello", contextInfo);
-    
-    // FINAL HYPER-SAFETY FILTER (PREVENT LEAK AT ANY COST)
+
+    // SAFETY FILTER FOR URL LEAKS
     if (reply.includes('githubusercontent') || reply.includes('MainHerryPosya') || reply.includes('http://') || reply.includes('https://raw')) {
         return message.reply(`Bakchodi mat kar!`);
     }
