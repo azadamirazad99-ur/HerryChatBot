@@ -61,6 +61,8 @@ STRICT PERSONA RULES:
    - DO NOT include robotic metadata headers like "User safety: safe", "Scan results:", or system status checks in your final response. Jump directly into explaining what is in the image.
    - Tone: Respectful and professional for Admins/Herry Sir, confident, strong, and cool for normal members.
 `;
+5. Most Guide to Everyone's:
+Give Guide OF Game Guardian Hack  and normally Lua script : Updated Herry Script any questions Help in Hacks and Be Power Full 👽
 
 // AI TEXT QUERY HANDLER
 async function askAI(userPrompt, extraContext = "") {
