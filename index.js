@@ -1,5 +1,5 @@
 // ===================================================
-// HERRY CHAT BOT - DISCORD UTILITY & COMMUNITY MASTER
+// HERRY CHAT BOT - DISCORD UTILITY & MULTIMODAL MASTER
 // ===================================================
 
 const { Client, GatewayIntentBits, Partials, PermissionsBitField, EmbedBuilder } = require('discord.js');
@@ -32,44 +32,45 @@ const LINKS_MAP = [
     { keywords: ['getkey', 'key', 'how to get key', 'where is key'], link: 'https://discord.com/channels/1529467083962843186/1541722634927214622' }
 ];
 
-// EXPANDED ABUSE LIST (Desi & English Slurs)
+// EXPANDED ABUSE LIST (Exact Word Matching)
 const EXACT_BAD_WORDS = [
     'mc', 'bc', 'bsdk', 'madarchod', 'bhenchod', 'chutiya', 'gand', 'laude', 'bhosdike', 
     'fuck', 'bitch', 'asshole', 'bastard', 'motherfucker', 'cunt', 'dick'
 ];
 
-// STRICT DECOMPILE / SOURCE BLOCK KEYWORDS
+// SECURITY BLOCK KEYWORDS
 const SECURITY_BLOCK_KEYWORDS = [
     'uncompile', 'uncompiled', 'decompile', 'decompiled', 'decrypt', 'decrypted',
     'decode', 'decoded', 'raw source', 'raw link', 'raw script', 'source code',
     'lua source', 'mainherryposya', 'give code', 'script code'
 ];
 
-// SYSTEM PROMPT FOR AI ASSISTANT
+// BOT SYSTEM PROMPT
 const BOT_SYSTEM_PROMPT = `
-You are HerryChatBot, the ultimate AI community and scripting assistant created strictly and ONLY by Herry.
-You provide technical help, Discord server support, programming guides, and community management.
+You are HerryChatBot, the elite AI assistant created strictly and ONLY by Herry.
+You provide technical help, code assistance, server guides, and general support.
 
 CORE DIRECTIVES:
-1. STRICT OWNER IDENTIFICATION: Your owner and boss is ONLY Herry. If anyone asks about "Shahzaib" or asks "Shahzaib kon hai", strictly reply: "Mujhe Shahzaib ke baare me nahi pata."
-2. LANGUAGE ADAPTATION: Detect the language of the user's message.
-   - If the user talks in pure English, reply strictly in English.
-   - If the user talks in Roman Urdu/Hindi, reply in Roman Urdu/Hindi.
-   Tone: For Admins/Boss (Herry Sir), show ultimate respect. For normal users, keep a casual, cool vibe ("Abe oye", "Bhai sun", "Scene set hai").
-3. Keep responses clean, concise, and well-structured.
+1. STRICT OWNER IDENTIFICATION: Your owner and boss is ONLY Herry. If anyone asks about "Shahzaib" or "Shahzaib kon hai", strictly reply: "Mujhe Shahzaib ke baare me nahi pata."
+2. LANGUAGE ADAPTATION: Detect user's language (English or Roman Urdu/Hindi).
+   - Reply in pure English if the user talks in English.
+   - Reply in Roman Urdu/Hindi if the user talks in Roman Urdu/Hindi.
+   Tone: Respectful for Admins/Herry Sir, casual and friendly for normal members.
+3. IMAGE & VISION PROCESSING: You have active vision capabilities to view, read, and analyze images/documents provided by users.
 `;
 
+// AI TEXT QUERY HANDLER
 async function askAI(userPrompt, extraContext = "") {
     const fullSystemMessage = `${BOT_SYSTEM_PROMPT}\nUser Context: ${extraContext}`;
 
-    // 1. PRIMARY: GROQ API
+    // 1. PRIMARY: GROQ (llama-3.3-70b-versatile)
     try {
         const groqResponse = await groq.chat.completions.create({
             messages: [
                 { role: 'system', content: fullSystemMessage },
                 { role: 'user', content: userPrompt }
             ],
-            model: 'llama-3.1-8b-instant',
+            model: 'llama-3.3-70b-versatile',
             temperature: 0.7,
             max_tokens: 1200,
         });
@@ -78,10 +79,10 @@ async function askAI(userPrompt, extraContext = "") {
             return groqResponse.choices[0].message.content;
         }
     } catch (groqErr) {
-        console.warn('⚠️ Groq Failed. Switching to OpenRouter Gateway...');
+        console.warn('⚠️ Groq Primary Failed. Routing to OpenRouter Gateway...');
     }
 
-    // 2. SECONDARY: OPENROUTER FREE GATEWAY
+    // 2. SECONDARY: OPENROUTER GATEWAY (x-ai/grok-4-fast:free)
     try {
         const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
             method: 'POST',
@@ -92,7 +93,7 @@ async function askAI(userPrompt, extraContext = "") {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                model: 'openrouter/free',
+                model: 'x-ai/grok-4-fast:free',
                 messages: [
                     { role: 'system', content: fullSystemMessage },
                     { role: 'user', content: userPrompt }
@@ -111,10 +112,49 @@ async function askAI(userPrompt, extraContext = "") {
     return "Abe bhai/sir, network issue aa raha hai AI server se. Ek baar dubara message try karo!";
 }
 
+// AI VISION QUERY HANDLER (IMAGE SCANNER)
+async function askVisionAI(userPrompt, imageUrl) {
+    try {
+        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+                'HTTP-Referer': 'https://railway.app',
+                'X-Title': 'HerryChatBot',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                model: 'x-ai/grok-4-fast:free', // Primary Vision Model
+                messages: [
+                    {
+                        role: 'system',
+                        content: BOT_SYSTEM_PROMPT
+                    },
+                    {
+                        role: 'user',
+                        content: [
+                            { type: 'text', text: userPrompt || 'Analyze and describe this image in detail.' },
+                            { type: 'image_url', image_url: { url: imageUrl } }
+                        ]
+                    }
+                ]
+            })
+        });
+
+        const data = await response.json();
+        if (data.choices && data.choices[0]?.message?.content) {
+            return data.choices[0].message.content;
+        }
+    } catch (err) {
+        console.error('Vision API Error:', err);
+    }
+    return "❌ Image view/scan karne me network error aaya! Phir se send kar.";
+}
+
 // BOT EVENTS
 client.once('ready', () => {
-    console.log(`🤖 [HERRY CHAT BOT] Active as ${client.user.tag}`);
-    client.user.setActivity('HerryHacks VIP | !models', { type: 3 });
+    console.log(`🤖 [HERRY CHAT BOT] Multimodal Master Active as ${client.user.tag}`);
+    client.user.setActivity('HerryHacks Community | !models', { type: 3 });
 });
 
 client.on('messageCreate', async (message) => {
@@ -122,8 +162,7 @@ client.on('messageCreate', async (message) => {
 
     const contentLower = message.content.toLowerCase();
 
-    // 1. SMART AUTO-MODERATION (Exact Word Boundaries Check)
-    // Insults/abuse isolate karke detect karta hai, usernames ko false-trigger nahi karega.
+    // 1. SMART AUTO-MODERATION (Exact Bad Word Isolation Check)
     const wordsInMessage = contentLower.split(/\s+/);
     const containsDirectAbuse = EXACT_BAD_WORDS.some(badWord => 
         wordsInMessage.includes(badWord) || contentLower.includes(` ${badWord} `)
@@ -145,16 +184,26 @@ client.on('messageCreate', async (message) => {
         return;
     }
 
-    // 2. COMMAND: SHOW SUPPORTED AI MODELS LIST
+    // 2. COMMAND: SHOW ALL ACTIVE & NEW MODELS
     if (contentLower === '!models') {
         const modelEmbed = new EmbedBuilder()
-            .setTitle('🤖 Bot Supported AI Models')
-            .setColor('#7289DA')
+            .setTitle('🤖 HerryChatBot - Active AI Engines & Vision Models')
+            .setColor('#00FF7F')
             .addFields(
-                { name: '📝 Text Models Engine', value: '• Gemini 3.5-Flash\n• Mimo-v2.5 Pro\n• Grok 4.6 High\n• DeepSeek V4 Pro Max' },
-                { name: '🎨 Image Generation Engines', value: '• GPT Image 1\n• Photon\n• Gemini 2.5 Flash Image Preview\n• Grok Imagine Quality' }
+                { 
+                    name: '🌐 OpenRouter Models (Vision & High Context)', 
+                    value: '• **openrouter/free** (Auto Vision Router)\n• **google/gemma-4-31b-it:free** (262K Vision Context)\n• **minimax/minimax-m3:free** (1.0M Token Vision Window)\n• **x-ai/grok-4-fast:free** (Primary Multimodal Fast Engine)\n• **qwen/qwen2.5-vl-72b-instruct:free** (High OCR & Document Parser)\n• **Gemini 3.5-Flash** | **Mimo-v2.5 Pro** | **DeepSeek V4 Pro Max**' 
+                },
+                { 
+                    name: '⚡ Groq LPU Models (Ultra Fast Speed)', 
+                    value: '• **qwen/qwen3.8-27b** (Instant Vision - 3 Images/req)\n• **qwen/qwen3.6-27b** (Structural Analysis - 5 Images/req)\n• **meta-llama/llama-4-scout-17b-16e-instruct** (Fast Image Scan)\n• **llama-3.3-70b-versatile** (Primary Ultra-Fast Text Engine)\n• **groq/compound** (Multi-step Reasoning Agent)' 
+                },
+                { 
+                    name: '🎨 Image Generation Preview Engines', 
+                    value: '• **GPT Image 1** | **Photon** | **Gemini 2.5 Flash Image** | **Grok Imagine**' 
+                }
             )
-            .setFooter({ text: 'Tag the bot in chat to process queries with active AI engines.' });
+            .setFooter({ text: 'Tag the bot with a prompt or upload an image to use Vision AI.' });
 
         return message.reply({ embeds: [modelEmbed] });
     }
@@ -187,7 +236,17 @@ client.on('messageCreate', async (message) => {
         }
     }
 
-    // 5. AI RESPONSES GENERATION
+    // 5. IMAGE SCANNER CHECK (MULTIMODAL VISION SUPPORT)
+    if (message.attachments.size > 0) {
+        const image = message.attachments.first();
+        if (image.contentType && image.contentType.startsWith('image/')) {
+            await message.channel.sendTyping();
+            const visionResult = await askVisionAI(cleanPrompt, image.url);
+            return message.reply(`🖼️ **Image Scan Result:**\n${visionResult}`);
+        }
+    }
+
+    // 6. STANDARD AI TEXT RESPONSE GENERATION
     await message.channel.sendTyping();
 
     const contextInfo = `
