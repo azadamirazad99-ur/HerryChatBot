@@ -45,18 +45,21 @@ const SECURITY_BLOCK_KEYWORDS = [
     'lua source', 'mainherryposya', 'give code', 'script code'
 ];
 
-// BOT SYSTEM PROMPT
+// BOT SYSTEM PROMPT (UPDATED PERSONA & LANGUAGE DIRECTIVES)
 const BOT_SYSTEM_PROMPT = `
-You are HerryChatBot, the elite AI assistant created strictly and ONLY by Herry.
+You are HerryChatBot, an elite, powerful male AI assistant created strictly and ONLY by Herry.
 You provide technical help, code assistance, server guides, and general support.
 
-CORE DIRECTIVES:
-1. STRICT OWNER IDENTIFICATION: Your owner and boss is ONLY Herry. If anyone asks about "Shahzaib" or "Shahzaib kon hai", strictly reply: "Mujhe Shahzaib ke baare me nahi pata."
-2. LANGUAGE ADAPTATION: Detect user's language (English or Roman Urdu/Hindi).
-   - Reply in pure English if the user talks in English.
-   - Reply in Roman Urdu/Hindi if the user talks in Roman Urdu/Hindi.
-   Tone: Respectful for Admins/Herry Sir, casual and friendly for normal members.
-3. IMAGE & VISION PROCESSING: You have active vision capabilities via OpenRouter and Groq to view, read, and analyze images/documents provided by users.
+STRICT PERSONA RULES:
+1. GENDER & PERSONA: You are 100% MALE/MARD. Never refer to yourself as female. Always use masculine grammar in Roman Urdu (e.g., "Main kar sakta hoon", "Main aa gaya hoon", "Main samajh gaya", "Bhai", "Sir").
+2. STRICT OWNER IDENTIFICATION: Your owner and boss is ONLY Herry. If anyone asks about "Shahzaib" or "Shahzaib kon hai", strictly reply: "Mujhe Shahzaib ke baare me nahi pata."
+3. EXACT LANGUAGE MATCHING:
+   - If the user writes in English, reply STRICTLY in English.
+   - If the user writes in Roman Urdu / Hindi, reply STRICTLY in Roman Urdu / Hindi. Never mix standard Urdu script with Roman Urdu.
+4. IMAGE / VISION ANALYSIS STYLE:
+   - Provide direct, clear, and powerful image breakdowns.
+   - DO NOT include robotic metadata headers like "User safety: safe", "Scan results:", or system status checks in your final response. Jump directly into explaining what is in the image.
+   - Tone: Respectful and professional for Admins/Herry Sir, confident, strong, and cool for normal members.
 `;
 
 // AI TEXT QUERY HANDLER
@@ -111,11 +114,13 @@ async function askAI(userPrompt, extraContext = "") {
         console.error('❌ OpenRouter Gateway Error:', openRouterErr);
     }
 
-    return "Abe bhai/sir, network issue aa raha hai AI server se. Ek baar dubara message try karo!";
+    return "Bhai, AI server ki taraf se koi network issue aaya hai. Ek baar dubara message try kar!";
 }
 
 // AI VISION QUERY HANDLER (IMAGE SCANNER)
-async function askVisionAI(userPrompt, imageUrl) {
+async function askVisionAI(userPrompt, imageUrl, userLanguageContext) {
+    const visionSystemPrompt = `${BOT_SYSTEM_PROMPT}\nLanguage Constraint: ${userLanguageContext}`;
+
     // 1. PRIMARY: OPENROUTER AUTOMATED FREE VISION ROUTER
     try {
         const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -127,16 +132,16 @@ async function askVisionAI(userPrompt, imageUrl) {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                model: 'openrouter/free', // Dynamic live free multimodal vision router
+                model: 'openrouter/free',
                 messages: [
                     {
                         role: 'system',
-                        content: BOT_SYSTEM_PROMPT
+                        content: visionSystemPrompt
                     },
                     {
                         role: 'user',
                         content: [
-                            { type: 'text', text: userPrompt || 'Analyze and describe this image in detail.' },
+                            { type: 'text', text: userPrompt || 'Explain and describe what is visible in this image in detail.' },
                             { type: 'image_url', image_url: { url: imageUrl } }
                         ]
                     }
@@ -157,7 +162,7 @@ async function askVisionAI(userPrompt, imageUrl) {
         try {
             const groqVisionResponse = await groq.chat.completions.create({
                 messages: [
-                    { role: 'system', content: BOT_SYSTEM_PROMPT },
+                    { role: 'system', content: visionSystemPrompt },
                     {
                         role: 'user',
                         content: [
@@ -178,7 +183,7 @@ async function askVisionAI(userPrompt, imageUrl) {
         }
     }
 
-    return "❌ Image view/scan karne me network error aaya! Phir se send kar.";
+    return "❌ Image view/scan karne me network issue aaya hai! Dubara upload karke check kar.";
 }
 
 // BOT EVENTS
@@ -248,6 +253,10 @@ client.on('messageCreate', async (message) => {
 
     const cleanPrompt = message.content.replace(/<@!?\d+>/g, '').trim();
 
+    // Language Detection Context
+    const isEnglish = /^[a-zA-Z0-9\s.,?!'\-]+$/.test(cleanPrompt) && !cleanPrompt.includes('karo') && !cleanPrompt.includes('hai') && !cleanPrompt.includes('bhai');
+    const langContext = isEnglish ? "User is speaking strictly English. Reply ONLY in English." : "User is speaking Roman Urdu / Hindi. Reply ONLY in Roman Urdu / Hindi with masculine tone.";
+
     // 4. QUICK LINKS
     const hasLinkWord = contentLower.includes('link') || contentLower.includes('links');
     if (message.guild.id === MAIN_SERVER_ID && hasLinkWord) {
@@ -264,8 +273,15 @@ client.on('messageCreate', async (message) => {
         const image = message.attachments.first();
         if (image.contentType && image.contentType.startsWith('image/')) {
             await message.channel.sendTyping();
-            const visionResult = await askVisionAI(cleanPrompt, image.url);
-            return message.reply(`🖼️ **Image Scan Result:**\n${visionResult}`);
+            let visionResult = await askVisionAI(cleanPrompt, image.url, langContext);
+
+            // Filter out unwanted system outputs
+            visionResult = visionResult
+                .replace(/User safety:\s*safe/gi, '')
+                .replace(/Scan results:/gi, '')
+                .trim();
+
+            return message.reply(visionResult || "Image scan ho gayi hai!");
         }
     }
 
@@ -276,6 +292,7 @@ client.on('messageCreate', async (message) => {
     Server Name: ${message.guild.name}
     User Name: ${message.author.username}
     User Authority: ${isHighAuthority ? 'High Authority / Boss / Admin' : 'Normal User'}
+    Language Context: ${langContext}
     `;
 
     const reply = await askAI(cleanPrompt || "Hello", contextInfo);
