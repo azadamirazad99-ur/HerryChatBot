@@ -16,7 +16,7 @@ const client = new Client({
     partials: [Partials.Channel, Partials.Message, Partials.GuildMember]
 });
 
-// Initialize Groq API safely
+// Initialize Groq API
 const groq = process.env.GROQ_API_KEY ? new Groq({ apiKey: process.env.GROQ_API_KEY }) : null;
 
 const MAIN_SERVER_ID = process.env.MAIN_SERVER_ID || '1529467083962843186';
@@ -56,14 +56,14 @@ CORE DIRECTIVES:
    - Reply in pure English if the user talks in English.
    - Reply in Roman Urdu/Hindi if the user talks in Roman Urdu/Hindi.
    Tone: Respectful for Admins/Herry Sir, casual and friendly for normal members.
-3. IMAGE & VISION PROCESSING: You have active vision capabilities to view, read, and analyze images/documents provided by users.
+3. IMAGE & VISION PROCESSING: You have active vision capabilities via OpenRouter and Groq to view, read, and analyze images/documents provided by users.
 `;
 
 // AI TEXT QUERY HANDLER
 async function askAI(userPrompt, extraContext = "") {
     const fullSystemMessage = `${BOT_SYSTEM_PROMPT}\nUser Context: ${extraContext}`;
 
-    // 1. PRIMARY: GROQ API
+    // 1. PRIMARY: GROQ API (Fast Text Engine)
     if (groq) {
         try {
             const groqResponse = await groq.chat.completions.create({
@@ -84,7 +84,7 @@ async function askAI(userPrompt, extraContext = "") {
         }
     }
 
-    // 2. SECONDARY: OPENROUTER GATEWAY (x-ai/grok-4-fast:free)
+    // 2. SECONDARY: OPENROUTER GATEWAY (Dynamic Free Router)
     try {
         const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
             method: 'POST',
@@ -95,7 +95,7 @@ async function askAI(userPrompt, extraContext = "") {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                model: 'x-ai/grok-4-fast:free',
+                model: 'openrouter/free',
                 messages: [
                     { role: 'system', content: fullSystemMessage },
                     { role: 'user', content: userPrompt }
@@ -116,6 +116,7 @@ async function askAI(userPrompt, extraContext = "") {
 
 // AI VISION QUERY HANDLER (IMAGE SCANNER)
 async function askVisionAI(userPrompt, imageUrl) {
+    // 1. PRIMARY: OPENROUTER AUTOMATED FREE VISION ROUTER
     try {
         const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
             method: 'POST',
@@ -126,7 +127,7 @@ async function askVisionAI(userPrompt, imageUrl) {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                model: 'x-ai/grok-4-fast:free',
+                model: 'openrouter/free', // Dynamic live free multimodal vision router
                 messages: [
                     {
                         role: 'system',
@@ -148,12 +149,39 @@ async function askVisionAI(userPrompt, imageUrl) {
             return data.choices[0].message.content;
         }
     } catch (err) {
-        console.error('Vision API Error:', err);
+        console.warn('⚠️ OpenRouter Free Vision Router failed, attempting Groq Vision...');
     }
+
+    // 2. FALLBACK: GROQ VISION API (qwen/qwen3.8-27b)
+    if (groq) {
+        try {
+            const groqVisionResponse = await groq.chat.completions.create({
+                messages: [
+                    { role: 'system', content: BOT_SYSTEM_PROMPT },
+                    {
+                        role: 'user',
+                        content: [
+                            { type: 'text', text: userPrompt || 'Analyze this image.' },
+                            { type: 'image_url', image_url: { url: imageUrl } }
+                        ]
+                    }
+                ],
+                model: 'qwen/qwen3.8-27b',
+                max_tokens: 1000
+            });
+
+            if (groqVisionResponse.choices && groqVisionResponse.choices[0]?.message?.content) {
+                return groqVisionResponse.choices[0].message.content;
+            }
+        } catch (groqVisionErr) {
+            console.error('❌ Groq Vision Error:', groqVisionErr);
+        }
+    }
+
     return "❌ Image view/scan karne me network error aaya! Phir se send kar.";
 }
 
-// BOT EVENTS (UPDATED TO CLIENTREADY TO FIX WARNING)
+// BOT EVENTS
 client.once('clientReady', () => {
     console.log(`🤖 [HERRY CHAT BOT] Multimodal Master Active as ${client.user.tag}`);
     client.user.setActivity('HerryHacks Community | !models', { type: 3 });
@@ -185,19 +213,19 @@ client.on('messageCreate', async (message) => {
         return;
     }
 
-    // 2. COMMAND: SHOW ALL ACTIVE & NEW MODELS
+    // 2. COMMAND: SHOW ACTIVE MODELS
     if (contentLower === '!models') {
         const modelEmbed = new EmbedBuilder()
-            .setTitle('🤖 HerryChatBot - Active AI Engines & Vision Models')
+            .setTitle('🤖 HerryChatBot - Active Vision & AI Models')
             .setColor('#00FF7F')
             .addFields(
                 { 
-                    name: '🌐 OpenRouter Models (Vision & High Context)', 
-                    value: '• **openrouter/free** (Auto Vision Router)\n• **google/gemma-4-31b-it:free** (262K Vision Context)\n• **minimax/minimax-m3:free** (1.0M Token Vision Window)\n• **x-ai/grok-4-fast:free** (Primary Multimodal Fast Engine)\n• **qwen/qwen2.5-vl-72b-instruct:free** (High OCR & Document Parser)' 
+                    name: '🌐 OpenRouter Models', 
+                    value: '• **openrouter/free** (Automated Live Multimodal Vision Router)' 
                 },
                 { 
-                    name: '⚡ Groq LPU Models (Ultra Fast Speed)', 
-                    value: '• **qwen/qwen3.8-27b** (Instant Vision - 3 Images/req)\n• **qwen/qwen3.6-27b** (Structural Analysis - 5 Images/req)\n• **meta-llama/llama-4-scout-17b-16e-instruct** (Fast Image Scan)\n• **llama-3.1-8b-instant** (Primary Ultra-Fast Text Engine)\n• **groq/compound** (Multi-step Reasoning Agent)' 
+                    name: '⚡ Groq Vision Models', 
+                    value: '• **qwen/qwen3.8-27b** (Flagship Fast Vision)\n• **qwen/qwen3.6-27b** (Fallback Vision)\n• **meta-llama/llama-4-scout-17b-16e-instruct** (Llama-4 Lightweight Vision)\n• **llama-3.1-8b-instant** (Fast Text Engine)' 
                 }
             )
             .setFooter({ text: 'Tag the bot with a prompt or upload an image to use Vision AI.' });
@@ -231,7 +259,7 @@ client.on('messageCreate', async (message) => {
         }
     }
 
-    // 5. IMAGE SCANNER CHECK
+    // 5. IMAGE SCANNER CHECK (MULTIMODAL VISION)
     if (message.attachments.size > 0) {
         const image = message.attachments.first();
         if (image.contentType && image.contentType.startsWith('image/')) {
