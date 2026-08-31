@@ -16,8 +16,8 @@ const client = new Client({
     partials: [Partials.Channel, Partials.Message, Partials.GuildMember]
 });
 
-// Initialize Groq API
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || '' });
+// Initialize Groq API safely
+const groq = process.env.GROQ_API_KEY ? new Groq({ apiKey: process.env.GROQ_API_KEY }) : null;
 
 const MAIN_SERVER_ID = process.env.MAIN_SERVER_ID || '1529467083962843186';
 
@@ -63,23 +63,25 @@ CORE DIRECTIVES:
 async function askAI(userPrompt, extraContext = "") {
     const fullSystemMessage = `${BOT_SYSTEM_PROMPT}\nUser Context: ${extraContext}`;
 
-    // 1. PRIMARY: GROQ (llama-3.3-70b-versatile)
-    try {
-        const groqResponse = await groq.chat.completions.create({
-            messages: [
-                { role: 'system', content: fullSystemMessage },
-                { role: 'user', content: userPrompt }
-            ],
-            model: 'llama-3.3-70b-versatile',
-            temperature: 0.7,
-            max_tokens: 1200,
-        });
+    // 1. PRIMARY: GROQ API
+    if (groq) {
+        try {
+            const groqResponse = await groq.chat.completions.create({
+                messages: [
+                    { role: 'system', content: fullSystemMessage },
+                    { role: 'user', content: userPrompt }
+                ],
+                model: 'llama-3.1-8b-instant',
+                temperature: 0.7,
+                max_tokens: 1200,
+            });
 
-        if (groqResponse.choices && groqResponse.choices[0]?.message?.content) {
-            return groqResponse.choices[0].message.content;
+            if (groqResponse.choices && groqResponse.choices[0]?.message?.content) {
+                return groqResponse.choices[0].message.content;
+            }
+        } catch (groqErr) {
+            console.warn('⚠️ Groq Primary Failed. Routing to OpenRouter Gateway...');
         }
-    } catch (groqErr) {
-        console.warn('⚠️ Groq Primary Failed. Routing to OpenRouter Gateway...');
     }
 
     // 2. SECONDARY: OPENROUTER GATEWAY (x-ai/grok-4-fast:free)
@@ -124,7 +126,7 @@ async function askVisionAI(userPrompt, imageUrl) {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                model: 'x-ai/grok-4-fast:free', // Primary Vision Model
+                model: 'x-ai/grok-4-fast:free',
                 messages: [
                     {
                         role: 'system',
@@ -151,8 +153,8 @@ async function askVisionAI(userPrompt, imageUrl) {
     return "❌ Image view/scan karne me network error aaya! Phir se send kar.";
 }
 
-// BOT EVENTS
-client.once('ready', () => {
+// BOT EVENTS (UPDATED TO CLIENTREADY TO FIX WARNING)
+client.once('clientReady', () => {
     console.log(`🤖 [HERRY CHAT BOT] Multimodal Master Active as ${client.user.tag}`);
     client.user.setActivity('HerryHacks Community | !models', { type: 3 });
 });
@@ -171,7 +173,6 @@ client.on('messageCreate', async (message) => {
     if (containsDirectAbuse) {
         try {
             if (message.member.moderatable) {
-                // 24 Hours Timeout (1 Day)
                 const duration = 24 * 60 * 60 * 1000;
                 await message.member.timeout(duration, 'Abusive Language / Slurs Detected');
                 await message.reply(`⚠️ ${message.author} ko **Abuse** ki wajah se **24 Ghante (1 Day)** ka Timeout de diya gaya hai!`);
@@ -192,15 +193,11 @@ client.on('messageCreate', async (message) => {
             .addFields(
                 { 
                     name: '🌐 OpenRouter Models (Vision & High Context)', 
-                    value: '• **openrouter/free** (Auto Vision Router)\n• **google/gemma-4-31b-it:free** (262K Vision Context)\n• **minimax/minimax-m3:free** (1.0M Token Vision Window)\n• **x-ai/grok-4-fast:free** (Primary Multimodal Fast Engine)\n• **qwen/qwen2.5-vl-72b-instruct:free** (High OCR & Document Parser)\n• **Gemini 3.5-Flash** | **Mimo-v2.5 Pro** | **DeepSeek V4 Pro Max**' 
+                    value: '• **openrouter/free** (Auto Vision Router)\n• **google/gemma-4-31b-it:free** (262K Vision Context)\n• **minimax/minimax-m3:free** (1.0M Token Vision Window)\n• **x-ai/grok-4-fast:free** (Primary Multimodal Fast Engine)\n• **qwen/qwen2.5-vl-72b-instruct:free** (High OCR & Document Parser)' 
                 },
                 { 
                     name: '⚡ Groq LPU Models (Ultra Fast Speed)', 
-                    value: '• **qwen/qwen3.8-27b** (Instant Vision - 3 Images/req)\n• **qwen/qwen3.6-27b** (Structural Analysis - 5 Images/req)\n• **meta-llama/llama-4-scout-17b-16e-instruct** (Fast Image Scan)\n• **llama-3.3-70b-versatile** (Primary Ultra-Fast Text Engine)\n• **groq/compound** (Multi-step Reasoning Agent)' 
-                },
-                { 
-                    name: '🎨 Image Generation Preview Engines', 
-                    value: '• **GPT Image 1** | **Photon** | **Gemini 2.5 Flash Image** | **Grok Imagine**' 
+                    value: '• **qwen/qwen3.8-27b** (Instant Vision - 3 Images/req)\n• **qwen/qwen3.6-27b** (Structural Analysis - 5 Images/req)\n• **meta-llama/llama-4-scout-17b-16e-instruct** (Fast Image Scan)\n• **llama-3.1-8b-instant** (Primary Ultra-Fast Text Engine)\n• **groq/compound** (Multi-step Reasoning Agent)' 
                 }
             )
             .setFooter({ text: 'Tag the bot with a prompt or upload an image to use Vision AI.' });
@@ -211,21 +208,19 @@ client.on('messageCreate', async (message) => {
     // STRICT CHECK: ONLY REPLY WHEN BOT IS TAGGED
     if (!message.mentions.has(client.user)) return;
 
-    // 3. SECURITY BLOCK: PREVENT DECOMPILE / SOURCE REQUESTS
+    // 3. SECURITY BLOCK
     const isSecurityThreat = SECURITY_BLOCK_KEYWORDS.some(kw => contentLower.includes(kw));
     if (isSecurityThreat) {
         return message.reply(`Bakchodi mat kar!`);
     }
 
-    // Authority Check
     const isHighAuthority = message.member.permissions.has(PermissionsBitField.Flags.Administrator) ||
                             message.member.permissions.has(PermissionsBitField.Flags.ManageGuild) ||
                             message.member.roles.cache.size > 3;
 
-    // Clean user prompt
     const cleanPrompt = message.content.replace(/<@!?\d+>/g, '').trim();
 
-    // 4. MAIN SERVER QUICK LINKS (REQUIRES "LINK" IN USER MESSAGE)
+    // 4. QUICK LINKS
     const hasLinkWord = contentLower.includes('link') || contentLower.includes('links');
     if (message.guild.id === MAIN_SERVER_ID && hasLinkWord) {
         for (const item of LINKS_MAP) {
@@ -236,7 +231,7 @@ client.on('messageCreate', async (message) => {
         }
     }
 
-    // 5. IMAGE SCANNER CHECK (MULTIMODAL VISION SUPPORT)
+    // 5. IMAGE SCANNER CHECK
     if (message.attachments.size > 0) {
         const image = message.attachments.first();
         if (image.contentType && image.contentType.startsWith('image/')) {
@@ -246,7 +241,7 @@ client.on('messageCreate', async (message) => {
         }
     }
 
-    // 6. STANDARD AI TEXT RESPONSE GENERATION
+    // 6. STANDARD AI TEXT RESPONSE
     await message.channel.sendTyping();
 
     const contextInfo = `
@@ -257,7 +252,6 @@ client.on('messageCreate', async (message) => {
 
     const reply = await askAI(cleanPrompt || "Hello", contextInfo);
 
-    // SAFETY FILTER FOR URL LEAKS
     if (reply.includes('githubusercontent') || reply.includes('MainHerryPosya') || reply.includes('http://') || reply.includes('https://raw')) {
         return message.reply(`Bakchodi mat kar!`);
     }
