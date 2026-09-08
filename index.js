@@ -26,7 +26,7 @@ const LINKS_MAP = [
     { keywords: ['reversoqzz', 'reverso'], link: 'https://discord.com/channels/1529467083962843186/1529477377917452339/1529524492450402506' },
     { keywords: ['lulubox'], link: 'https://discord.com/channels/1529467083962843186/1529477377917452339/1529527842097074206' },
     { keywords: ['devvir'], link: 'https://discord.com/channels/1529467083962843186/1529477377917452339/1529527533660405790' },
-    { keywords: ['multispace', 'multi space'], link: 'https://discord.com/channels/1529467083962843186/1529477377917452339/1531705203487932597' },
+    { keywords: ['multispace', 'multi space'], link: 'https://discord.com/channels/1529467083962843186/1531705203487932597' },
     { keywords: ['herry.lua', 'posya', 'herry lua', 'posya lua', 'script', 'lua'], link: 'https://discord.com/channels/1529467083962843186/1529477377917452339/1542089775715057694' },
     { keywords: ['setup', 'where is setup', 'setup link', 'setup kaha se karu'], link: 'https://discord.com/channels/1529467083962843186/1529477486235226172' },
     { keywords: ['getkey', 'key', 'how to get key', 'where is key'], link: 'https://discord.com/channels/1529467083962843186/1541722634927214622' }
@@ -188,7 +188,7 @@ async function askVisionAI(userPrompt, imageUrl, userLanguageContext) {
 }
 
 // BOT EVENTS
-client.once('clientReady', () => {
+client.once('ready', () => {
     console.log(`🤖 [HERRY CHAT BOT] Multimodal Master Active as ${client.user.tag}`);
     client.user.setActivity('HerryHacks Community | !models', { type: 3 });
 });
@@ -206,7 +206,7 @@ client.on('messageCreate', async (message) => {
 
     if (containsDirectAbuse) {
         try {
-            if (message.member.moderatable) {
+            if (message.member && message.member.moderatable) {
                 const duration = 24 * 60 * 60 * 1000;
                 await message.member.timeout(duration, 'Abusive Language / Slurs Detected');
                 await message.reply(`⚠️ ${message.author} ko **Abuse** ki wajah se **24 Ghante (1 Day)** ka Timeout de diya gaya hai!`);
@@ -248,9 +248,11 @@ client.on('messageCreate', async (message) => {
         return message.reply(`Bakchodi mat kar!`);
     }
 
-    const isHighAuthority = message.member.permissions.has(PermissionsBitField.Flags.Administrator) ||
-                            message.member.permissions.has(PermissionsBitField.Flags.ManageGuild) ||
-                            message.member.roles.cache.size > 3;
+    const isHighAuthority = message.member ? (
+        message.member.permissions.has(PermissionsBitField.Flags.Administrator) ||
+        message.member.permissions.has(PermissionsBitField.Flags.ManageGuild) ||
+        message.member.roles.cache.size > 3
+    ) : false;
 
     const cleanPrompt = message.content.replace(/<@!?\d+>/g, '').trim();
 
@@ -258,12 +260,12 @@ client.on('messageCreate', async (message) => {
     const isEnglish = /^[a-zA-Z0-9\s.,?!'\-]+$/.test(cleanPrompt) && !cleanPrompt.includes('karo') && !cleanPrompt.includes('hai') && !cleanPrompt.includes('bhai');
     const langContext = isEnglish ? "User is speaking strictly English. Reply ONLY in English." : "User is speaking Roman Urdu / Hindi. Reply ONLY in Roman Urdu / Hindi with masculine tone.";
 
-    // 4. QUICK LINKS
+    // 4. QUICK LINKS (Allow dynamic link support across servers or fallback gracefully)
     const hasLinkWord = contentLower.includes('link') || contentLower.includes('links');
-    if (message.guild.id === MAIN_SERVER_ID && hasLinkWord) {
+    if (hasLinkWord) {
         for (const item of LINKS_MAP) {
             if (item.keywords.some(kw => contentLower.includes(kw))) {
-                const prefixGreeting = isHighAuthority ? "Hi Herry Sir / Boss! Ye raha aapka required link:" : "Abe oye, ye le link:";
+                const prefixGreeting = isHighAuthority ? "Hi Boss! Ye raha aapka required link:" : "Abe oye, ye le link:";
                 return message.reply(`${prefixGreeting}\n👉 ${item.link}`);
             }
         }
@@ -286,7 +288,7 @@ client.on('messageCreate', async (message) => {
         }
     }
 
-    // 6. STANDARD AI TEXT RESPONSE
+    // 6. STANDARD AI TEXT RESPONSE (WORKS ACROSS ALL GUILDS/SERVERS)
     await message.channel.sendTyping();
 
     const contextInfo = `
