@@ -3,7 +3,7 @@
 // ===================================================
 
 const { Client, GatewayIntentBits, Partials, PermissionsBitField, EmbedBuilder } = require('discord.js');
-const { joinVoiceChannel, createAudioPlayer, createAudioResource, EndBehaviorType, getVoiceConnection } = require('@discordjs/voice');
+const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus, EndBehaviorType, getVoiceConnection } = require('@discordjs/voice');
 const Groq = require('groq-sdk');
 const gTTS = require('gtts');
 const fs = require('fs');
@@ -23,8 +23,6 @@ const client = new Client({
 
 // Initialize Groq API
 const groq = process.env.GROQ_API_KEY ? new Groq({ apiKey: process.env.GROQ_API_KEY }) : null;
-
-const MAIN_SERVER_ID = process.env.MAIN_SERVER_ID || '1529467083962843186';
 
 // DYNAMIC LINKS MAP
 const LINKS_MAP = [
@@ -173,7 +171,7 @@ async function playSpeechInVC(connection, text) {
             player.play(resource);
             connection.subscribe(player);
 
-            player.on(AudioPlayerStatus?.Idle || 'idle', () => {
+            player.on(AudioPlayerStatus.Idle, () => {
                 if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
                 resolve();
             });
@@ -199,7 +197,6 @@ function attachVoiceListener(connection) {
             if (!groq) return;
 
             try {
-                // Transcribe User VC Audio using Groq Whisper Large V3
                 const transcription = await groq.audio.transcriptions.create({
                     file: fs.createReadStream(pcmPath),
                     model: 'whisper-large-v3-turbo',
