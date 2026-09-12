@@ -1,5 +1,5 @@
 // ===================================================
-// HERRY CHAT BOT - REALTIME VC VOICE ENGINE
+// HERRY CHAT BOT - REALTIME VC VOICE ENGINE (FIXED)
 // ===================================================
 
 const { Client, GatewayIntentBits, Partials, PermissionsBitField, EmbedBuilder } = require('discord.js');
@@ -34,7 +34,7 @@ const LINKS_MAP = [
     { keywords: ['lulubox'], link: 'https://discord.com/channels/1529467083962843186/1529477377917452339/1529527842097074206' },
     { keywords: ['devvir'], link: 'https://discord.com/channels/1529467083962843186/1529477377917452339/1529527533660405790' },
     { keywords: ['multispace', 'multi space'], link: 'https://discord.com/channels/1529467083962843186/1531705203487932597' },
-    { keywords: ['herry.lua', 'posya', 'herry lua', 'posya lua', 'script', 'lua'], link: 'https://discord.com/channels/1529467083962843186/1529477377917452339/1542089775715057694' },
+    { keywords: ['herry.lua', 'posya', 'herry lua', 'posya lua', 'script', 'lua'], link: 'https://discord.com/channels/1529467083962843186/1542089775715057694' },
     { keywords: ['setup', 'where is setup', 'setup link', 'setup kaha se karu'], link: 'https://discord.com/channels/1529467083962843186/1529477486235226172' },
     { keywords: ['getkey', 'key', 'how to get key', 'where is key'], link: 'https://discord.com/channels/1529467083962843186/1541722634927214622' }
 ];
@@ -60,8 +60,27 @@ STRICT PERSONA RULES:
 3. EXACT LANGUAGE MATCHING:
    - If user writes in English, reply STRICTLY in pure English.
    - If user writes in Roman Urdu / Hindi, reply STRICTLY in Roman Urdu / Hindi.
-4. Keep replies direct, helpful and confident.
+4. Keep replies direct, concise, short (1-2 lines max for voice) and helpful.
 `;
+
+// HELPER: PCM to WAV Converter for Groq Whisper Compatibility
+function writeWavHeader(sampleRate, numChannels, pcmBuffer) {
+    const header = Buffer.alloc(44);
+    header.write('RIFF', 0);
+    header.writeUInt32LE(36 + pcmBuffer.length, 4);
+    header.write('WAVE', 8);
+    header.write('fmt ', 12);
+    header.writeUInt32LE(16, 16); // Subchunk1Size (16 for PCM)
+    header.writeUInt16LE(1, 20);  // AudioFormat (1 for PCM)
+    header.writeUInt16LE(numChannels, 22);
+    header.writeUInt32LE(sampleRate, 24);
+    header.writeUInt32LE(sampleRate * numChannels * 2, 28); // ByteRate
+    header.writeUInt16LE(numChannels * 2, 32); // BlockAlign
+    header.writeUInt16LE(16, 34); // BitsPerSample
+    header.write('data', 36);
+    header.writeUInt32LE(pcmBuffer.length, 40);
+    return Buffer.concat([header, pcmBuffer]);
+}
 
 async function askAI(userPrompt, extraContext = "") {
     const fullSystemMessage = `${BOT_SYSTEM_PROMPT}\nUser Context: ${extraContext}`;
@@ -75,7 +94,7 @@ async function askAI(userPrompt, extraContext = "") {
                 ],
                 model: 'llama-3.1-8b-instant',
                 temperature: 0.7,
-                max_tokens: 1000,
+                max_tokens: 200,
             });
 
             if (groqResponse.choices && groqResponse.choices[0]?.message?.content) {
@@ -153,88 +172,112 @@ async function askVisionAI(userPrompt, imageUrl, userLanguageContext) {
     return "❌ Image scan karne me issue aaya hai! Dubara send kar.";
 }
 
-// PLAY AUDIO IN VC
+// PLAY AUDIO IN VC (Enhanced TTS)
 async function playSpeechInVC(connection, text) {
     return new Promise((resolve) => {
-        const tempPath = path.join(__dirname, `temp_speech_${Date.now()}.mp3`);
-        const speech = new gTTS(text, 'hi');
+        // Clean text for TTS (remove emojis & special markdown)
+        const cleanText = text.replace(/[*_#~`]/g, '').trim();
+        const tempMp3Path = path.join(__dirname, `speech_${Date.now()}.mp3`);
+        
+        // Using Urdu/Hindi optimized TTS
+        const speech = new gTTS(cleanText, 'hi');
 
-        speech.save(tempPath, (err) => {
+        speech.save(tempMp3Path, (err) => {
             if (err) {
-                console.error("gTTS Error:", err);
+                console.error("❌ gTTS Error:", err);
                 return resolve();
             }
 
             const player = createAudioPlayer();
-            const resource = createAudioResource(tempPath);
+            const resource = createAudioResource(tempMp3Path);
             player.play(resource);
             connection.subscribe(player);
 
             player.on(AudioPlayerStatus.Idle, () => {
-                if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+                if (fs.existsSync(tempMp3Path)) fs.unlinkSync(tempMp3Path);
                 resolve();
             });
 
             player.on('error', (error) => {
-                console.error("Player Error:", error);
-                if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+                console.error("❌ Audio Player Error:", error);
+                if (fs.existsSync(tempMp3Path)) fs.unlinkSync(tempMp3Path);
                 resolve();
             });
         });
     });
 }
 
-// ATTACH VC LISTEN ENGINE (WHISPER)
+// ATTACH VC LISTEN ENGINE (PROPER WHISPER STT ENGINE)
+const processingUsers = new Set();
+
 function attachVoiceListener(connection) {
     const receiver = connection.receiver;
 
     receiver.speaking.on('start', (userId) => {
+        if (processingUsers.has(userId)) return; // Avoid duplicate listening triggers
+        processingUsers.add(userId);
+
+        console.log(`🎙️ Started listening to user: ${userId}`);
+
         const opusStream = receiver.subscribe(userId, {
-            end: { behavior: EndBehaviorType.AfterSilence, duration: 1200 }
+            end: { behavior: EndBehaviorType.AfterSilence, duration: 1000 }
         });
 
-        const decoder = new prism.opus.Decoder({ rate: 48000, channels: 2, frameSize: 960 });
-        const pcmPath = path.join(__dirname, `user_${userId}_${Date.now()}.pcm`);
-        const outStream = fs.createWriteStream(pcmPath);
+        const decoder = new prism.opus.Decoder({ rate: 48000, channels: 1, frameSize: 960 });
+        const pcmChunks = [];
 
-        pipeline(opusStream, decoder, outStream, async (err) => {
-            if (err) {
-                if (fs.existsSync(pcmPath)) fs.unlinkSync(pcmPath);
+        opusStream.pipe(decoder);
+
+        decoder.on('data', (chunk) => {
+            pcmChunks.push(chunk);
+        });
+
+        decoder.on('end', async () => {
+            processingUsers.delete(userId);
+            const rawPcm = Buffer.concat(pcmChunks);
+
+            // Minimum audio size check (~0.5 seconds of audio)
+            if (rawPcm.length < 16000) {
                 return;
             }
 
             if (!groq) {
-                console.log("❌ GROQ_API_KEY missing in variables!");
+                console.error("❌ GROQ_API_KEY missing in environment variables!");
                 return;
             }
 
+            const wavBuffer = writeWavHeader(48000, 1, rawPcm);
+            const wavPath = path.join(__dirname, `voice_${userId}_${Date.now()}.wav`);
+            fs.writeFileSync(wavPath, wavBuffer);
+
             try {
-                const stats = fs.statSync(pcmPath);
-                if (stats.size < 4000) {
-                    if (fs.existsSync(pcmPath)) fs.unlinkSync(pcmPath);
-                    return; // Too short/empty voice input
-                }
-
-                console.log("🎙️ Processing Voice Data...");
-
+                console.log("⚡ Sending audio to Groq Whisper...");
                 const transcription = await groq.audio.transcriptions.create({
-                    file: fs.createReadStream(pcmPath),
+                    file: fs.createReadStream(wavPath),
                     model: 'whisper-large-v3-turbo',
                     response_format: 'json',
+                    language: 'hi' // Supports Hindi & Roman Hindi/Urdu voice input
                 });
 
-                if (fs.existsSync(pcmPath)) fs.unlinkSync(pcmPath);
+                if (fs.existsSync(wavPath)) fs.unlinkSync(wavPath);
 
                 const recognizedText = transcription.text ? transcription.text.trim() : "";
+                
                 if (recognizedText.length > 1) {
-                    console.log(`🗣️ Recognized Voice: "${recognizedText}"`);
-                    const aiReply = await askAI(recognizedText, "VC Voice Mode: Keep reply under 2 sentences.");
+                    console.log(`🗣️ User Said: "${recognizedText}"`);
+                    const aiReply = await askAI(recognizedText, "User spoke via VC mic. Keep response very short and natural (1-2 lines).");
+                    console.log(`🤖 Bot Responding: "${aiReply}"`);
                     await playSpeechInVC(connection, aiReply);
                 }
             } catch (wErr) {
-                if (fs.existsSync(pcmPath)) fs.unlinkSync(pcmPath);
-                console.error("Whisper VC Error:", wErr);
+                if (fs.existsSync(wavPath)) fs.unlinkSync(wavPath);
+                console.error("❌ Whisper Transcription Error:", wErr);
             }
+        });
+
+        opusStream.on('error', (err) => {
+            processingUsers.delete(userId);
+            console.error("❌ Opus Stream Error:", err);
         });
     });
 }
@@ -293,7 +336,7 @@ client.on('messageCreate', async (message) => {
                 activeConnections.delete(message.guild.id);
             });
 
-            return message.reply(`🎙️ Main **${voiceChannel.name}** VC me aa gaya hoon! Ab mic khol ke bolo, main sun raha hoon.`);
+            return message.reply(`🎙️ Main **${voiceChannel.name}** VC me aa gaya hoon! Ab mic khol ke "Hello" bolo, main jawab dunga.`);
         } catch (error) {
             console.error('VC Connection Error:', error);
             return message.reply('❌ VC Connect hone me issue aaya!');
