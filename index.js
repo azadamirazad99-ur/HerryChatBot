@@ -8,6 +8,8 @@ const Groq = require('groq-sdk');
 const gTTS = require('gtts');
 const fs = require('fs');
 const path = require('path');
+const { pipeline } = require('stream');
+const prism = require('prism-media');
 require('dotenv').config();
 
 const client = new Client({
@@ -21,7 +23,6 @@ const client = new Client({
     partials: [Partials.Channel, Partials.Message, Partials.GuildMember]
 });
 
-// Initialize Groq API
 const groq = process.env.GROQ_API_KEY ? new Groq({ apiKey: process.env.GROQ_API_KEY }) : null;
 
 // DYNAMIC LINKS MAP
@@ -35,20 +36,17 @@ const LINKS_MAP = [
     { keywords: ['getkey', 'key', 'how to get key', 'where is key'], link: 'https://discord.com/channels/1529467083962843186/1541722634927214622' }
 ];
 
-// BAD WORDS LIST
 const EXACT_BAD_WORDS = [
     'mc', 'bc', 'bsdk', 'madarchod', 'bhenchod', 'chutiya', 'gand', 'laude', 'bhosdike', 
     'fuck', 'bitch', 'asshole', 'bastard', 'motherfucker', 'cunt', 'dick'
 ];
 
-// SECURITY BLOCK KEYWORDS
 const SECURITY_BLOCK_KEYWORDS = [
     'uncompile', 'uncompiled', 'decompile', 'decompiled', 'decrypt', 'decrypted',
     'decode', 'decoded', 'raw source', 'raw link', 'raw script', 'source code',
     'lua source', 'mainherryposya', 'give code', 'script code'
 ];
 
-// SYSTEM PROMPT
 const BOT_SYSTEM_PROMPT = `
 You are HerryChatBot, an elite, powerful male AI assistant created strictly and ONLY by Herry.
 You provide technical help, code assistance, server guides, and general support.
@@ -62,7 +60,6 @@ STRICT PERSONA RULES:
 4. Keep replies direct, helpful and confident.
 `;
 
-// AI TEXT QUERY
 async function askAI(userPrompt, extraContext = "") {
     const fullSystemMessage = `${BOT_SYSTEM_PROMPT}\nUser Context: ${extraContext}`;
 
@@ -115,7 +112,6 @@ async function askAI(userPrompt, extraContext = "") {
     return "Bhai server issue hai, thodi der baad message kar!";
 }
 
-// AI VISION QUERY
 async function askVisionAI(userPrompt, imageUrl, userLanguageContext) {
     const visionSystemPrompt = `${BOT_SYSTEM_PROMPT}\nLanguage Constraint: ${userLanguageContext}`;
 
@@ -154,7 +150,7 @@ async function askVisionAI(userPrompt, imageUrl, userLanguageContext) {
     return "❌ Image scan karne me issue aaya hai! Dubara send kar.";
 }
 
-// TTS PLAYBACK IN VC
+// PLAY AUDIO IN VC
 async function playSpeechInVC(connection, text) {
     return new Promise((resolve) => {
         const tempPath = path.join(__dirname, `temp_speech_${Date.now()}.mp3`);
@@ -179,21 +175,25 @@ async function playSpeechInVC(connection, text) {
     });
 }
 
-// GROQ WHISPER LIVE VC LISTENER
+// ATTACH VC LISTEN ENGINE
 function attachVoiceListener(connection) {
     const receiver = connection.receiver;
 
     receiver.speaking.on('start', (userId) => {
-        const audioStream = receiver.subscribe(userId, {
-            end: { behavior: EndBehaviorType.AfterSilence, duration: 1200 }
+        const opusStream = receiver.subscribe(userId, {
+            end: { behavior: EndBehaviorType.AfterSilence, duration: 1000 }
         });
 
-        const pcmPath = path.join(__dirname, `user_voice_${userId}_${Date.now()}.pcm`);
-        const writeStream = fs.createWriteStream(pcmPath);
+        const opusDecoder = new prism.opus.Decoder({ frameSize: 960, channels: 2, rate: 48000 });
+        const pcmPath = path.join(__dirname, `user_${userId}_${Date.now()}.pcm`);
+        const outStream = fs.createWriteStream(pcmPath);
 
-        audioStream.pipe(writeStream);
+        pipeline(opusStream, opusDecoder, outStream, async (err) => {
+            if (err) {
+                if (fs.existsSync(pcmPath)) fs.unlinkSync(pcmPath);
+                return;
+            }
 
-        writeStream.on('finish', async () => {
             if (!groq) return;
 
             try {
@@ -207,25 +207,23 @@ function attachVoiceListener(connection) {
 
                 const recognizedText = transcription.text ? transcription.text.trim() : "";
                 if (recognizedText.length > 2) {
-                    console.log(`🎙️ User Voice Recognized: ${recognizedText}`);
-                    const aiVoiceReply = await askAI(recognizedText, "Voice VC Conversation: Keep reply short in 1-2 lines.");
-                    await playSpeechInVC(connection, aiVoiceReply);
+                    console.log(`🎙️ VC Speech Recognized: ${recognizedText}`);
+                    const aiReply = await askAI(recognizedText, "VC Voice Mode: Keep response under 2 short sentences.");
+                    await playSpeechInVC(connection, aiReply);
                 }
             } catch (wErr) {
                 if (fs.existsSync(pcmPath)) fs.unlinkSync(pcmPath);
-                console.error("Whisper VC Error:", wErr);
+                console.error("Whisper VC Transcribe Error:", wErr);
             }
         });
     });
 }
 
-// READY EVENT
 client.once('ready', () => {
     console.log(`🤖 [HERRY CHAT BOT] Online as ${client.user.tag}`);
-    client.user.setActivity('HerryHacks | !joinvc | !models', { type: 3 });
+    client.user.setActivity('HerryHacks | !joinvc | !say', { type: 3 });
 });
 
-// MESSAGE HANDLER
 client.on('messageCreate', async (message) => {
     if (message.author.bot || !message.guild) return;
 
@@ -266,7 +264,7 @@ client.on('messageCreate', async (message) => {
         });
 
         attachVoiceListener(connection);
-        return message.reply(`🎙️ Main **${voiceChannel.name}** VC me aa gaya hoon! Ab mic khol ke bolo, Groq Whisper se sun raha hoon.`);
+        return message.reply(`🎙️ Main **${voiceChannel.name}** VC me aa gaya hoon! Ab mic khol ke bolo.`);
     }
 
     // 3. !leavevc COMMAND
@@ -280,18 +278,21 @@ client.on('messageCreate', async (message) => {
         }
     }
 
-    // 4. !models COMMAND
-    if (contentLower === '!models') {
-        const modelEmbed = new EmbedBuilder()
-            .setTitle('🤖 HerryChatBot Commands & AI Models')
-            .setColor('#00FF7F')
-            .addFields(
-                { name: '🎙️ Voice Commands', value: '• **!joinvc** - Bot ko aapke VC me lane ke liye\n• **!leavevc** - Bot ko VC se nikalne ke liye' },
-                { name: '⚡ Speech Engine', value: '• **Groq Whisper Large V3** (Real-time VC Audio Recognition)' },
-                { name: '🌐 Text & Vision Engines', value: '• **Groq llama-3.1-8b** & **OpenRouter Free Router**' }
-            );
+    // 4. !say COMMAND (TEST BOT VOICE IN VC DIRECTLY)
+    if (contentLower.startsWith('!say')) {
+        const textToSay = message.content.slice(4).trim();
+        const connection = getVoiceConnection(message.guild.id);
 
-        return message.reply({ embeds: [modelEmbed] });
+        if (!connection) {
+            return message.reply("❌ Pehle mujhe VC me bulao (`!joinvc`)!");
+        }
+
+        if (!textToSay) {
+            return message.reply("❌ Text bhi likho! Example: `!say Hello bhai`");
+        }
+
+        await playSpeechInVC(connection, textToSay);
+        return message.reply(`🗣️ Bol diya: "${textToSay}"`);
     }
 
     // BOT TAG CHECK FOR TEXT CHAT
