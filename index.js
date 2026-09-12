@@ -3,7 +3,7 @@
 // ===================================================
 
 const { Client, GatewayIntentBits, Partials, PermissionsBitField, EmbedBuilder } = require('discord.js');
-const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus, EndBehaviorType, getVoiceConnection } = require('@discordjs/voice');
+const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus, EndBehaviorType, getVoiceConnection, VoiceConnectionStatus, entersState } = require('@discordjs/voice');
 const Groq = require('groq-sdk');
 const gTTS = require('gtts');
 const fs = require('fs');
@@ -174,11 +174,17 @@ async function playSpeechInVC(connection, text) {
                 if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
                 resolve();
             });
+
+            player.on('error', (error) => {
+                console.error("Player Error:", error);
+                if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+                resolve();
+            });
         });
     });
 }
 
-// ATTACH VC LISTEN ENGINE
+// ATTACH VC LISTEN ENGINE (WHISPER)
 function attachVoiceListener(connection) {
     const receiver = connection.receiver;
 
@@ -258,17 +264,29 @@ client.on('messageCreate', async (message) => {
             return message.reply('❌ Pehle kisi Voice Channel (VC) me join ho jao ya tag karo (`!joinvc #VC-Name`)!');
         }
 
-        const connection = joinVoiceChannel({
-            channelId: voiceChannel.id,
-            guildId: voiceChannel.guild.id,
-            adapterCreator: voiceChannel.guild.voiceAdapterCreator,
-            selfDeaf: false,
-            selfMute: false
-        });
+        try {
+            const connection = joinVoiceChannel({
+                channelId: voiceChannel.id,
+                guildId: voiceChannel.guild.id,
+                adapterCreator: voiceChannel.guild.voiceAdapterCreator,
+                selfDeaf: false,
+                selfMute: false
+            });
 
-        activeConnections.set(message.guild.id, connection);
-        attachVoiceListener(connection);
-        return message.reply(`🎙️ Main **${voiceChannel.name}** VC me aa gaya hoon! Ab mic khol ke bolo.`);
+            await entersState(connection, VoiceConnectionStatus.Ready, 10_000);
+
+            activeConnections.set(message.guild.id, connection);
+            attachVoiceListener(connection);
+
+            connection.on(VoiceConnectionStatus.Disconnected, () => {
+                activeConnections.delete(message.guild.id);
+            });
+
+            return message.reply(`🎙️ Main **${voiceChannel.name}** VC me aa gaya hoon! Ab mic khol ke bolo, main VC me hi jawab dunga.`);
+        } catch (error) {
+            console.error('VC Connection Failed:', error);
+            return message.reply('❌ VC Connect hone me error aaya!');
+        }
     }
 
     // 3. !leavevc COMMAND
@@ -283,7 +301,7 @@ client.on('messageCreate', async (message) => {
         }
     }
 
-    // 4. !say COMMAND
+    // 4. !say COMMAND (Voice Speak Test)
     if (contentLower.startsWith('!say')) {
         const textToSay = message.content.slice(4).trim();
         const connection = activeConnections.get(message.guild.id) || getVoiceConnection(message.guild.id);
@@ -297,10 +315,10 @@ client.on('messageCreate', async (message) => {
         }
 
         await playSpeechInVC(connection, textToSay);
-        return message.reply(`🗣️ Bol diya: "${textToSay}"`);
+        return message.reply(`🗣️ VC me bol diya: "${textToSay}"`);
     }
 
-    // BOT TAG CHECK FOR TEXT CHAT
+    // BOT TAG CHECK FOR TEXT CHAT (Text mode tabhi chalega jab bot ko mention karoge)
     if (!message.mentions.has(client.user)) return;
 
     // 5. SECURITY BLOCK
