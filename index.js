@@ -1,5 +1,5 @@
 // ===================================================
-// HERRY CHAT BOT - MULTIMODAL & REALTIME VC WHISPER ENGINE
+// HERRY CHAT BOT - REALTIME VC VOICE ENGINE
 // ===================================================
 
 const { Client, GatewayIntentBits, Partials, PermissionsBitField, EmbedBuilder } = require('discord.js');
@@ -190,22 +190,33 @@ function attachVoiceListener(connection) {
 
     receiver.speaking.on('start', (userId) => {
         const opusStream = receiver.subscribe(userId, {
-            end: { behavior: EndBehaviorType.AfterSilence, duration: 1000 }
+            end: { behavior: EndBehaviorType.AfterSilence, duration: 1200 }
         });
 
-        const opusDecoder = new prism.opus.Decoder({ frameSize: 960, channels: 2, rate: 48000 });
+        const decoder = new prism.opus.Decoder({ rate: 48000, channels: 2, frameSize: 960 });
         const pcmPath = path.join(__dirname, `user_${userId}_${Date.now()}.pcm`);
         const outStream = fs.createWriteStream(pcmPath);
 
-        pipeline(opusStream, opusDecoder, outStream, async (err) => {
+        pipeline(opusStream, decoder, outStream, async (err) => {
             if (err) {
                 if (fs.existsSync(pcmPath)) fs.unlinkSync(pcmPath);
                 return;
             }
 
-            if (!groq) return;
+            if (!groq) {
+                console.log("❌ GROQ_API_KEY missing in variables!");
+                return;
+            }
 
             try {
+                const stats = fs.statSync(pcmPath);
+                if (stats.size < 4000) {
+                    if (fs.existsSync(pcmPath)) fs.unlinkSync(pcmPath);
+                    return; // Too short/empty voice input
+                }
+
+                console.log("🎙️ Processing Voice Data...");
+
                 const transcription = await groq.audio.transcriptions.create({
                     file: fs.createReadStream(pcmPath),
                     model: 'whisper-large-v3-turbo',
@@ -215,14 +226,14 @@ function attachVoiceListener(connection) {
                 if (fs.existsSync(pcmPath)) fs.unlinkSync(pcmPath);
 
                 const recognizedText = transcription.text ? transcription.text.trim() : "";
-                if (recognizedText.length > 2) {
-                    console.log(`🎙️ VC Speech Recognized: ${recognizedText}`);
-                    const aiReply = await askAI(recognizedText, "VC Voice Mode: Keep response under 2 short sentences.");
+                if (recognizedText.length > 1) {
+                    console.log(`🗣️ Recognized Voice: "${recognizedText}"`);
+                    const aiReply = await askAI(recognizedText, "VC Voice Mode: Keep reply under 2 sentences.");
                     await playSpeechInVC(connection, aiReply);
                 }
             } catch (wErr) {
                 if (fs.existsSync(pcmPath)) fs.unlinkSync(pcmPath);
-                console.error("Whisper VC Transcribe Error:", wErr);
+                console.error("Whisper VC Error:", wErr);
             }
         });
     });
@@ -273,7 +284,7 @@ client.on('messageCreate', async (message) => {
                 selfMute: false
             });
 
-            await entersState(connection, VoiceConnectionStatus.Ready, 10_000);
+            await entersState(connection, VoiceConnectionStatus.Ready, 15_000);
 
             activeConnections.set(message.guild.id, connection);
             attachVoiceListener(connection);
@@ -282,10 +293,10 @@ client.on('messageCreate', async (message) => {
                 activeConnections.delete(message.guild.id);
             });
 
-            return message.reply(`🎙️ Main **${voiceChannel.name}** VC me aa gaya hoon! Ab mic khol ke bolo, main VC me hi jawab dunga.`);
+            return message.reply(`🎙️ Main **${voiceChannel.name}** VC me aa gaya hoon! Ab mic khol ke bolo, main sun raha hoon.`);
         } catch (error) {
-            console.error('VC Connection Failed:', error);
-            return message.reply('❌ VC Connect hone me error aaya!');
+            console.error('VC Connection Error:', error);
+            return message.reply('❌ VC Connect hone me issue aaya!');
         }
     }
 
@@ -301,7 +312,7 @@ client.on('messageCreate', async (message) => {
         }
     }
 
-    // 4. !say COMMAND (Voice Speak Test)
+    // 4. !say COMMAND
     if (contentLower.startsWith('!say')) {
         const textToSay = message.content.slice(4).trim();
         const connection = activeConnections.get(message.guild.id) || getVoiceConnection(message.guild.id);
@@ -318,7 +329,7 @@ client.on('messageCreate', async (message) => {
         return message.reply(`🗣️ VC me bol diya: "${textToSay}"`);
     }
 
-    // BOT TAG CHECK FOR TEXT CHAT (Text mode tabhi chalega jab bot ko mention karoge)
+    // BOT TAG CHECK FOR TEXT CHAT
     if (!message.mentions.has(client.user)) return;
 
     // 5. SECURITY BLOCK
