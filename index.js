@@ -1,6 +1,9 @@
 // ===================================================
-// HERRY CHAT BOT - REALTIME VC VOICE ENGINE (FIXED)
+// HERRY CHAT BOT - REALTIME VC VOICE ENGINE (FINAL FIX)
 // ===================================================
+
+const ffmpeg = require('ffmpeg-static');
+process.env.FFMPEG_PATH = ffmpeg;
 
 const { Client, GatewayIntentBits, Partials, PermissionsBitField, EmbedBuilder } = require('discord.js');
 const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus, EndBehaviorType, getVoiceConnection, VoiceConnectionStatus, entersState } = require('@discordjs/voice');
@@ -34,7 +37,7 @@ const LINKS_MAP = [
     { keywords: ['lulubox'], link: 'https://discord.com/channels/1529467083962843186/1529477377917452339/1529527842097074206' },
     { keywords: ['devvir'], link: 'https://discord.com/channels/1529467083962843186/1529477377917452339/1529527533660405790' },
     { keywords: ['multispace', 'multi space'], link: 'https://discord.com/channels/1529467083962843186/1531705203487932597' },
-    { keywords: ['herry.lua', 'posya', 'herry lua', 'posya lua', 'script', 'lua'], link: 'https://discord.com/channels/1529467083962843186/1542089775715057694' },
+    { keywords: ['herry.lua', 'posya', 'herry lua', 'posya lua', 'script', 'lua'], link: 'https://discord.com/channels/1529467083962843186/1529477377917452339/1542089775715057694' },
     { keywords: ['setup', 'where is setup', 'setup link', 'setup kaha se karu'], link: 'https://discord.com/channels/1529467083962843186/1529477486235226172' },
     { keywords: ['getkey', 'key', 'how to get key', 'where is key'], link: 'https://discord.com/channels/1529467083962843186/1541722634927214622' }
 ];
@@ -70,13 +73,13 @@ function writeWavHeader(sampleRate, numChannels, pcmBuffer) {
     header.writeUInt32LE(36 + pcmBuffer.length, 4);
     header.write('WAVE', 8);
     header.write('fmt ', 12);
-    header.writeUInt32LE(16, 16); // Subchunk1Size (16 for PCM)
-    header.writeUInt16LE(1, 20);  // AudioFormat (1 for PCM)
+    header.writeUInt32LE(16, 16);
+    header.writeUInt16LE(1, 20);
     header.writeUInt16LE(numChannels, 22);
     header.writeUInt32LE(sampleRate, 24);
-    header.writeUInt32LE(sampleRate * numChannels * 2, 28); // ByteRate
-    header.writeUInt16LE(numChannels * 2, 32); // BlockAlign
-    header.writeUInt16LE(16, 34); // BitsPerSample
+    header.writeUInt32LE(sampleRate * numChannels * 2, 28);
+    header.writeUInt16LE(numChannels * 2, 32);
+    header.writeUInt16LE(16, 34);
     header.write('data', 36);
     header.writeUInt32LE(pcmBuffer.length, 40);
     return Buffer.concat([header, pcmBuffer]);
@@ -172,14 +175,12 @@ async function askVisionAI(userPrompt, imageUrl, userLanguageContext) {
     return "❌ Image scan karne me issue aaya hai! Dubara send kar.";
 }
 
-// PLAY AUDIO IN VC (Enhanced TTS)
+// PLAY AUDIO IN VC
 async function playSpeechInVC(connection, text) {
     return new Promise((resolve) => {
-        // Clean text for TTS (remove emojis & special markdown)
         const cleanText = text.replace(/[*_#~`]/g, '').trim();
         const tempMp3Path = path.join(__dirname, `speech_${Date.now()}.mp3`);
         
-        // Using Urdu/Hindi optimized TTS
         const speech = new gTTS(cleanText, 'hi');
 
         speech.save(tempMp3Path, (err) => {
@@ -214,7 +215,7 @@ function attachVoiceListener(connection) {
     const receiver = connection.receiver;
 
     receiver.speaking.on('start', (userId) => {
-        if (processingUsers.has(userId)) return; // Avoid duplicate listening triggers
+        if (processingUsers.has(userId)) return;
         processingUsers.add(userId);
 
         console.log(`🎙️ Started listening to user: ${userId}`);
@@ -236,7 +237,6 @@ function attachVoiceListener(connection) {
             processingUsers.delete(userId);
             const rawPcm = Buffer.concat(pcmChunks);
 
-            // Minimum audio size check (~0.5 seconds of audio)
             if (rawPcm.length < 16000) {
                 return;
             }
@@ -256,7 +256,7 @@ function attachVoiceListener(connection) {
                     file: fs.createReadStream(wavPath),
                     model: 'whisper-large-v3-turbo',
                     response_format: 'json',
-                    language: 'hi' // Supports Hindi & Roman Hindi/Urdu voice input
+                    language: 'hi'
                 });
 
                 if (fs.existsSync(wavPath)) fs.unlinkSync(wavPath);
