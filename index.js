@@ -3,6 +3,8 @@
 // ===================================================
 
 const { Client, GatewayIntentBits, Partials, PermissionsBitField, EmbedBuilder } = require('discord.js');
+const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus } = require('@discordjs/voice');
+const { MsEdgeTTS } = require('edge-tts');
 const Groq = require('groq-sdk');
 require('dotenv').config();
 
@@ -11,7 +13,8 @@ const client = new Client({
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent,
-        GatewayIntentBits.GuildMembers
+        GatewayIntentBits.GuildMembers,
+        GatewayIntentBits.GuildVoiceStates // Added for Voice Channel Support
     ],
     partials: [Partials.Channel, Partials.Message, Partials.GuildMember]
 });
@@ -58,7 +61,7 @@ STRICT PERSONA RULES:
    - If the user writes in Roman Urdu / Hindi, reply STRICTLY in Roman Urdu / Hindi.
 4. IMAGE / VISION ANALYSIS STYLE:
    - Provide direct, clear, and powerful image descriptions.
-   - DO NOT include robotic system phrases like "User safety: safe" or "Scan results:". Jump directly into explaininge  what is in the image.
+   - DO NOT include robotic system phrases like "User safety: safe" or "Scan results:". Jump directly into explaining what is in the image.
    - Tone: Respectful and professional for Admins/Herry Sir, confident, strong, and cool for normal members.
 5. BOT INFORMATION: [ Use GG (game guardian) guide to Everyone  also be hacker for everyone like U are hacker helping guiding to them if any problem help him in his menu hack guide Any type question answer him ]
 `;
@@ -187,6 +190,34 @@ async function askVisionAI(userPrompt, imageUrl, userLanguageContext) {
     return "❌ Image view/scan karne me network issue aaya hai! Dubara upload karke check kar.";
 }
 
+// HELPER FUNCTION: VOICE TTS PLAYER IN DISCORD VC
+async function speakInVC(voiceChannel, textPrompt, isEnglish) {
+    const connection = joinVoiceChannel({
+        channelId: voiceChannel.id,
+        guildId: voiceChannel.guild.id,
+        adapterCreator: voiceChannel.guild.voiceAdapterCreator,
+    });
+
+    // Urdu / Hinglish Male Voice setup
+    const voiceModel = isEnglish ? 'en-IN-PrabhatNeural' : 'ur-PK-AsadNeural';
+    
+    const tts = new MsEdgeTTS();
+    await tts.setMetadata(voiceModel, MsEdgeTTS.OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_STEREO);
+    
+    const audioStream = await tts.toStream(textPrompt);
+    const player = createAudioPlayer();
+    const resource = createAudioResource(audioStream);
+
+    player.play(resource);
+    connection.subscribe(player);
+
+    player.on(AudioPlayerStatus.Idle, () => {
+        setTimeout(() => {
+            if (connection) connection.destroy();
+        }, 1500);
+    });
+}
+
 // BOT EVENTS
 client.once('ready', () => {
     console.log(`🤖 [HERRY CHAT BOT] Multimodal Master Active as ${client.user.tag}`);
@@ -232,11 +263,43 @@ client.on('messageCreate', async (message) => {
                 { 
                     name: '⚡ Groq Vision Models', 
                     value: '• **qwen/qwen3.8-27b** (Flagship Fast Vision)\n• **qwen/qwen3.6-27b** (Fallback Vision)\n• **meta-llama/llama-4-scout-17b-16e-instruct** (Llama-4 Lightweight Vision)\n• **llama-3.1-8b-instant** (Fast Text Engine)' 
+                },
+                {
+                    name: '🎙️ Voice Module',
+                    value: '• Use **!vc <question>** or **!speak <question>** to talk in VC (ur-PK-AsadNeural Male Voice).'
                 }
             )
             .setFooter({ text: 'Tag the bot with a prompt or upload an image to use Vision AI.' });
 
         return message.reply({ embeds: [modelEmbed] });
+    }
+
+    // 2.5 NEW COMMAND: VOICE CHANNEL CHAT ASSISTANT (!vc / !speak)
+    if (contentLower.startsWith('!vc') || contentLower.startsWith('!speak')) {
+        const voiceChannel = message.member?.voice?.channel;
+        if (!voiceChannel) {
+            return message.reply('❌ Abe pehle kisi Voice Channel (VC) mein join ho jao!');
+        }
+
+        const cleanPrompt = message.content.replace(/^!(vc|speak)/i, '').trim();
+        if (!cleanPrompt) {
+            return message.reply('❌ !vc ke sath apna question bhi likho (e.g. `!vc kya haal hai`)');
+        }
+
+        await message.channel.sendTyping();
+        const isEnglish = /^[a-zA-Z0-9\s.,?!'\-]+$/.test(cleanPrompt) && !cleanPrompt.includes('karo') && !cleanPrompt.includes('hai');
+        
+        const voiceContext = `User Voice Query: Short, direct response in 1-2 short sentences max (masculine tone). ${isEnglish ? "Pure English" : "Urdu/Hinglish"}`;
+        const aiReply = await askAI(cleanPrompt, voiceContext);
+
+        message.reply(`🎙️ **VC Reply:** ${aiReply}`);
+        
+        try {
+            await speakInVC(voiceChannel, aiReply, isEnglish);
+        } catch (vErr) {
+            console.error("Voice Playback Error:", vErr);
+        }
+        return;
     }
 
     // STRICT CHECK: ONLY REPLY WHEN BOT IS TAGGED
