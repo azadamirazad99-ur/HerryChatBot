@@ -3,8 +3,8 @@
 // ===================================================
 
 const { Client, GatewayIntentBits, Partials, PermissionsBitField, EmbedBuilder } = require('discord.js');
-const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus } = require('@discordjs/voice');
-const { MsEdgeTTS } = require('edge-tts');
+const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus, getVoiceConnection } = require('@discordjs/voice');
+const { MsEdgeTTS, OUTPUT_FORMAT } = require('ms-edge-tts');
 const Groq = require('groq-sdk');
 require('dotenv').config();
 
@@ -14,7 +14,7 @@ const client = new Client({
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent,
         GatewayIntentBits.GuildMembers,
-        GatewayIntentBits.GuildVoiceStates // Added for Voice Channel Support
+        GatewayIntentBits.GuildVoiceStates
     ],
     partials: [Partials.Channel, Partials.Message, Partials.GuildMember]
 });
@@ -48,7 +48,7 @@ const SECURITY_BLOCK_KEYWORDS = [
     'lua source', 'mainherryposya', 'give code', 'script code'
 ];
 
-// BOT SYSTEM PROMPT (STRICT MALE PERSONA & EXACT LANGUAGE ADAPTATION)
+// BOT SYSTEM PROMPT
 const BOT_SYSTEM_PROMPT = `
 You are HerryChatBot, an elite, powerful male AI assistant created strictly and ONLY by Herry.
 You provide technical help, code assistance, server guides, and general support.
@@ -63,14 +63,13 @@ STRICT PERSONA RULES:
    - Provide direct, clear, and powerful image descriptions.
    - DO NOT include robotic system phrases like "User safety: safe" or "Scan results:". Jump directly into explaining what is in the image.
    - Tone: Respectful and professional for Admins/Herry Sir, confident, strong, and cool for normal members.
-5. BOT INFORMATION: [ Use GG (game guardian) guide to Everyone  also be hacker for everyone like U are hacker helping guiding to them if any problem help him in his menu hack guide Any type question answer him ]
+5. BOT INFORMATION: [ Use GG (game guardian) guide to Everyone also be hacker for everyone like U are hacker helping guiding to them if any problem help him in his menu hack guide Any type question answer him ]
 `;
 
 // AI TEXT QUERY HANDLER
 async function askAI(userPrompt, extraContext = "") {
     const fullSystemMessage = `${BOT_SYSTEM_PROMPT}\nUser Context: ${extraContext}`;
 
-    // 1. PRIMARY: GROQ API (Fast Text Engine)
     if (groq) {
         try {
             const groqResponse = await groq.chat.completions.create({
@@ -91,7 +90,6 @@ async function askAI(userPrompt, extraContext = "") {
         }
     }
 
-    // 2. SECONDARY: OPENROUTER GATEWAY (Dynamic Free Router)
     try {
         const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
             method: 'POST',
@@ -121,11 +119,10 @@ async function askAI(userPrompt, extraContext = "") {
     return "Bhai, AI server ki taraf se koi network issue aaya hai. Ek baar dubara message try kar!";
 }
 
-// AI VISION QUERY HANDLER (IMAGE SCANNER)
+// AI VISION QUERY HANDLER
 async function askVisionAI(userPrompt, imageUrl, userLanguageContext) {
     const visionSystemPrompt = `${BOT_SYSTEM_PROMPT}\nLanguage Constraint: ${userLanguageContext}`;
 
-    // 1. PRIMARY: OPENROUTER AUTOMATED FREE VISION ROUTER
     try {
         const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
             method: 'POST',
@@ -138,10 +135,7 @@ async function askVisionAI(userPrompt, imageUrl, userLanguageContext) {
             body: JSON.stringify({
                 model: 'openrouter/free',
                 messages: [
-                    {
-                        role: 'system',
-                        content: visionSystemPrompt
-                    },
+                    { role: 'system', content: visionSystemPrompt },
                     {
                         role: 'user',
                         content: [
@@ -161,7 +155,6 @@ async function askVisionAI(userPrompt, imageUrl, userLanguageContext) {
         console.warn('⚠️ OpenRouter Free Vision Router failed, attempting Groq Vision...');
     }
 
-    // 2. FALLBACK: GROQ VISION API (qwen/qwen3.8-27b)
     if (groq) {
         try {
             const groqVisionResponse = await groq.chat.completions.create({
@@ -190,32 +183,19 @@ async function askVisionAI(userPrompt, imageUrl, userLanguageContext) {
     return "❌ Image view/scan karne me network issue aaya hai! Dubara upload karke check kar.";
 }
 
-// HELPER FUNCTION: VOICE TTS PLAYER IN DISCORD VC
-async function speakInVC(voiceChannel, textPrompt, isEnglish) {
-    const connection = joinVoiceChannel({
-        channelId: voiceChannel.id,
-        guildId: voiceChannel.guild.id,
-        adapterCreator: voiceChannel.guild.voiceAdapterCreator,
-    });
-
-    // Urdu / Hinglish Male Voice setup
+// HELPER FUNCTION: TTS STREAM TO DISCORD VC
+async function speakInVC(connection, textPrompt, isEnglish) {
     const voiceModel = isEnglish ? 'en-IN-PrabhatNeural' : 'ur-PK-AsadNeural';
     
     const tts = new MsEdgeTTS();
-    await tts.setMetadata(voiceModel, MsEdgeTTS.OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_STEREO);
+    await tts.setMetadata(voiceModel, OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_STEREO);
     
-    const audioStream = await tts.toStream(textPrompt);
+    const { stream } = await tts.toStream(textPrompt);
     const player = createAudioPlayer();
-    const resource = createAudioResource(audioStream);
+    const resource = createAudioResource(stream);
 
     player.play(resource);
     connection.subscribe(player);
-
-    player.on(AudioPlayerStatus.Idle, () => {
-        setTimeout(() => {
-            if (connection) connection.destroy();
-        }, 1500);
-    });
 }
 
 // BOT EVENTS
@@ -229,7 +209,7 @@ client.on('messageCreate', async (message) => {
 
     const contentLower = message.content.toLowerCase();
 
-    // 1. SMART AUTO-MODERATION (Exact Bad Word Isolation Check)
+    // 1. SMART AUTO-MODERATION
     const wordsInMessage = contentLower.split(/\s+/);
     const containsDirectAbuse = EXACT_BAD_WORDS.some(badWord => 
         wordsInMessage.includes(badWord) || contentLower.includes(` ${badWord} `)
@@ -262,11 +242,11 @@ client.on('messageCreate', async (message) => {
                 },
                 { 
                     name: '⚡ Groq Vision Models', 
-                    value: '• **qwen/qwen3.8-27b** (Flagship Fast Vision)\n• **qwen/qwen3.6-27b** (Fallback Vision)\n• **meta-llama/llama-4-scout-17b-16e-instruct** (Llama-4 Lightweight Vision)\n• **llama-3.1-8b-instant** (Fast Text Engine)' 
+                    value: '• **qwen/qwen3.8-27b** (Flagship Fast Vision)\n• **qwen/qwen3.6-27b** (Fallback Vision)\n• **llama-3.1-8b-instant** (Fast Text Engine)' 
                 },
                 {
-                    name: '🎙️ Voice Module',
-                    value: '• Use **!vc <question>** or **!speak <question>** to talk in VC (ur-PK-AsadNeural Male Voice).'
+                    name: '🎙️ Voice VC Commands',
+                    value: '• **!joinvc** or **!joinvc #channel** (Bot joins VC permanently)\n• **!leavevc** (Bot leaves VC)\n• **!vc <question>** (Talk to bot while in VC)'
                 }
             )
             .setFooter({ text: 'Tag the bot with a prompt or upload an image to use Vision AI.' });
@@ -274,16 +254,57 @@ client.on('messageCreate', async (message) => {
         return message.reply({ embeds: [modelEmbed] });
     }
 
-    // 2.5 NEW COMMAND: VOICE CHANNEL CHAT ASSISTANT (!vc / !speak)
-    if (contentLower.startsWith('!vc') || contentLower.startsWith('!speak')) {
-        const voiceChannel = message.member?.voice?.channel;
+    // 3. VOICE COMMAND: !joinvc [channel]
+    if (contentLower.startsWith('!joinvc')) {
+        let voiceChannel = message.mentions.channels.first();
         if (!voiceChannel) {
-            return message.reply('❌ Abe pehle kisi Voice Channel (VC) mein join ho jao!');
+            voiceChannel = message.member?.voice?.channel;
+        }
+
+        if (!voiceChannel || voiceChannel.type !== 2) {
+            return message.reply('❌ Pehle kisi Voice Channel (VC) mein join ho jao ya VC tag karo (`!joinvc #General`)!');
+        }
+
+        joinVoiceChannel({
+            channelId: voiceChannel.id,
+            guildId: voiceChannel.guild.id,
+            adapterCreator: voiceChannel.guild.voiceAdapterCreator,
+            selfDeaf: false
+        });
+
+        return message.reply(`✅ Main **${voiceChannel.name}** VC mein join ho gaya hoon! Ab **!vc <sawal>** karke baat karo.`);
+    }
+
+    // 4. VOICE COMMAND: !leavevc
+    if (contentLower === '!leavevc') {
+        const connection = getVoiceConnection(message.guild.id);
+        if (connection) {
+            connection.destroy();
+            return message.reply('👋 Main Voice Channel se disconnect ho gaya hoon.');
+        } else {
+            return message.reply('❌ Main abhi kisi VC mein nahi hoon.');
+        }
+    }
+
+    // 5. VOICE CHAT ASSISTANT (!vc / !speak)
+    if (contentLower.startsWith('!vc') || contentLower.startsWith('!speak')) {
+        let connection = getVoiceConnection(message.guild.id);
+        const userVc = message.member?.voice?.channel;
+
+        if (!connection && userVc) {
+            connection = joinVoiceChannel({
+                channelId: userVc.id,
+                guildId: userVc.guild.id,
+                adapterCreator: userVc.guild.voiceAdapterCreator,
+                selfDeaf: false
+            });
+        } else if (!connection && !userVc) {
+            return message.reply('❌ Pehle `!joinvc` likh kar mujhe VC mein lao ya khud VC join karo!');
         }
 
         const cleanPrompt = message.content.replace(/^!(vc|speak)/i, '').trim();
         if (!cleanPrompt) {
-            return message.reply('❌ !vc ke sath apna question bhi likho (e.g. `!vc kya haal hai`)');
+            return message.reply('❌ !vc ke sath apna question bhi likho (e.g. `!vc Herry bhai kya haal hai`)');
         }
 
         await message.channel.sendTyping();
@@ -295,7 +316,7 @@ client.on('messageCreate', async (message) => {
         message.reply(`🎙️ **VC Reply:** ${aiReply}`);
         
         try {
-            await speakInVC(voiceChannel, aiReply, isEnglish);
+            await speakInVC(connection, aiReply, isEnglish);
         } catch (vErr) {
             console.error("Voice Playback Error:", vErr);
         }
@@ -305,7 +326,7 @@ client.on('messageCreate', async (message) => {
     // STRICT CHECK: ONLY REPLY WHEN BOT IS TAGGED
     if (!message.mentions.has(client.user)) return;
 
-    // 3. SECURITY BLOCK
+    // 6. SECURITY BLOCK
     const isSecurityThreat = SECURITY_BLOCK_KEYWORDS.some(kw => contentLower.includes(kw));
     if (isSecurityThreat) {
         return message.reply(`Bakchodi mat kar!`);
@@ -323,7 +344,7 @@ client.on('messageCreate', async (message) => {
     const isEnglish = /^[a-zA-Z0-9\s.,?!'\-]+$/.test(cleanPrompt) && !cleanPrompt.includes('karo') && !cleanPrompt.includes('hai') && !cleanPrompt.includes('bhai');
     const langContext = isEnglish ? "User is speaking strictly English. Reply ONLY in English." : "User is speaking Roman Urdu / Hindi. Reply ONLY in Roman Urdu / Hindi with masculine tone.";
 
-    // 4. QUICK LINKS (Allow dynamic link support across servers or fallback gracefully)
+    // 7. QUICK LINKS
     const hasLinkWord = contentLower.includes('link') || contentLower.includes('links');
     if (hasLinkWord) {
         for (const item of LINKS_MAP) {
@@ -334,14 +355,13 @@ client.on('messageCreate', async (message) => {
         }
     }
 
-    // 5. IMAGE SCANNER CHECK (MULTIMODAL VISION)
+    // 8. IMAGE SCANNER CHECK
     if (message.attachments.size > 0) {
         const image = message.attachments.first();
         if (image.contentType && image.contentType.startsWith('image/')) {
             await message.channel.sendTyping();
             let visionResult = await askVisionAI(cleanPrompt, image.url, langContext);
 
-            // Filter out unwanted system outputs
             visionResult = visionResult
                 .replace(/User safety:\s*safe/gi, '')
                 .replace(/Scan results:/gi, '')
@@ -351,7 +371,7 @@ client.on('messageCreate', async (message) => {
         }
     }
 
-    // 6. STANDARD AI TEXT RESPONSE (WORKS ACROSS ALL GUILDS/SERVERS)
+    // 9. STANDARD AI TEXT RESPONSE
     await message.channel.sendTyping();
 
     const contextInfo = `
