@@ -25,6 +25,9 @@ const client = new Client({
 
 const groq = process.env.GROQ_API_KEY ? new Groq({ apiKey: process.env.GROQ_API_KEY }) : null;
 
+// ACTIVE VOICE CONNECTIONS MAP
+const activeConnections = new Map();
+
 // DYNAMIC LINKS MAP
 const LINKS_MAP = [
     { keywords: ['reversoqzz', 'reverso'], link: 'https://discord.com/channels/1529467083962843186/1529477377917452339/1529524492450402506' },
@@ -263,25 +266,27 @@ client.on('messageCreate', async (message) => {
             selfMute: false
         });
 
+        activeConnections.set(message.guild.id, connection);
         attachVoiceListener(connection);
         return message.reply(`🎙️ Main **${voiceChannel.name}** VC me aa gaya hoon! Ab mic khol ke bolo.`);
     }
 
     // 3. !leavevc COMMAND
     if (contentLower === '!leavevc') {
-        const connection = getVoiceConnection(message.guild.id);
+        const connection = activeConnections.get(message.guild.id) || getVoiceConnection(message.guild.id);
         if (connection) {
             connection.destroy();
+            activeConnections.delete(message.guild.id);
             return message.reply('👋 Main VC se disconnect ho gaya hoon.');
         } else {
             return message.reply('❌ Main abhi kisi VC me nahi hoon.');
         }
     }
 
-    // 4. !say COMMAND (TEST BOT VOICE IN VC DIRECTLY)
+    // 4. !say COMMAND
     if (contentLower.startsWith('!say')) {
         const textToSay = message.content.slice(4).trim();
-        const connection = getVoiceConnection(message.guild.id);
+        const connection = activeConnections.get(message.guild.id) || getVoiceConnection(message.guild.id);
 
         if (!connection) {
             return message.reply("❌ Pehle mujhe VC me bulao (`!joinvc`)!");
