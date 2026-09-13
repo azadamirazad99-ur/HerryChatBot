@@ -1,5 +1,5 @@
 // ===================================================
-// HERRY CHAT BOT - REALTIME VC VOICE ENGINE (FINAL STABLE FIX)
+// HERRY CHAT BOT - REALTIME VC VOICE ENGINE (STT & TTS FIXED)
 // ===================================================
 
 const ffmpeg = require('ffmpeg-static');
@@ -57,15 +57,15 @@ You are HerryChatBot, an elite, powerful male AI assistant created strictly and 
 You provide technical help, code assistance, server guides, and general support.
 
 STRICT PERSONA RULES:
-1. GENDER & PERSONA: You are 100% MALE/MARD. Always use strong masculine grammar in Roman Urdu (e.g., "Main kar sakta hoon", "Main aa gaya hoon", "Main samajh gaya", "Bhai", "Sir").
+1. GENDER & PERSONA: You are 100% MALE/MARD. Always use strong masculine grammar in Roman Urdu / Hindi / English (e.g., "Main kar sakta hoon", "Main aa gaya hoon", "Bhai", "Sir").
 2. STRICT OWNER IDENTIFICATION: Your owner and boss is ONLY Herry. If anyone asks about "Shahzaib" or "Shahzaib kon hai", strictly reply: "Mujhe Shahzaib ke baare me nahi pata."
 3. EXACT LANGUAGE MATCHING:
-   - If user writes in English, reply STRICTLY in pure English.
-   - If user writes in Roman Urdu / Hindi, reply STRICTLY in Roman Urdu / Hindi.
-4. Keep replies direct, concise, short (1-2 lines max for voice) and helpful.
+   - If user speaks/writes in English, reply STRICTLY in English.
+   - If user speaks/writes in Roman Urdu / Hinglish, reply STRICTLY in Roman Urdu / Hinglish.
+4. Keep replies direct, ultra-short, natural and friendly (1 line max for voice).
 `;
 
-// HELPER: PCM to WAV Converter for Groq Whisper Compatibility
+// HELPER: PCM to WAV Converter for Groq Whisper Compatibility (Stereo 48kHz, 16-bit)
 function writeWavHeader(sampleRate, numChannels, pcmBuffer) {
     const header = Buffer.alloc(44);
     header.write('RIFF', 0);
@@ -73,7 +73,7 @@ function writeWavHeader(sampleRate, numChannels, pcmBuffer) {
     header.write('WAVE', 8);
     header.write('fmt ', 12);
     header.writeUInt32LE(16, 16);
-    header.writeUInt16LE(1, 20);
+    header.writeUInt16LE(1, 20); // PCM Format
     header.writeUInt16LE(numChannels, 22);
     header.writeUInt32LE(sampleRate, 24);
     header.writeUInt32LE(sampleRate * numChannels * 2, 28);
@@ -96,7 +96,7 @@ async function askAI(userPrompt, extraContext = "") {
                 ],
                 model: 'llama-3.1-8b-instant',
                 temperature: 0.7,
-                max_tokens: 200,
+                max_tokens: 150,
             });
 
             if (groqResponse.choices && groqResponse.choices[0]?.message?.content) {
@@ -133,7 +133,7 @@ async function askAI(userPrompt, extraContext = "") {
         console.error('❌ OpenRouter Error:', openRouterErr);
     }
 
-    return "Bhai server issue hai, thodi der baad message kar!";
+    return "Bhai server issue hai, thodi der baad baat karte hain!";
 }
 
 async function askVisionAI(userPrompt, imageUrl, userLanguageContext) {
@@ -174,13 +174,17 @@ async function askVisionAI(userPrompt, imageUrl, userLanguageContext) {
     return "❌ Image scan karne me issue aaya hai! Dubara send kar.";
 }
 
-// PLAY AUDIO IN VC
+// PLAY AUDIO IN VC (TTS WITH ENGLISH / HINDI HYBRID SUPPORT)
 async function playSpeechInVC(connection, text) {
     return new Promise((resolve) => {
         const cleanText = text.replace(/[*_#~`]/g, '').trim();
         const tempMp3Path = path.join(__dirname, `speech_${Date.now()}.mp3`);
         
-        const speech = new gTTS(cleanText, 'hi');
+        // Auto-detect accent for TTS
+        const isPureEnglish = /^[a-zA-Z0-9\s.,?!'\-]+$/.test(cleanText) && !cleanText.includes('karo') && !cleanText.includes('hai') && !cleanText.includes('bhai');
+        const langCode = isPureEnglish ? 'en' : 'hi';
+
+        const speech = new gTTS(cleanText, langCode);
 
         speech.save(tempMp3Path, (err) => {
             if (err) {
@@ -207,7 +211,7 @@ async function playSpeechInVC(connection, text) {
     });
 }
 
-// ATTACH VC LISTEN ENGINE (PROPER WHISPER STT ENGINE)
+// ATTACH VC LISTEN ENGINE (PROPER OPUS DECODING + WHISPER)
 const processingUsers = new Set();
 
 function attachVoiceListener(connection) {
@@ -217,13 +221,14 @@ function attachVoiceListener(connection) {
         if (processingUsers.has(userId)) return;
         processingUsers.add(userId);
 
-        console.log(`🎙️ Started listening to user: ${userId}`);
+        console.log(`🎙️ Listening to user: ${userId}`);
 
         const opusStream = receiver.subscribe(userId, {
-            end: { behavior: EndBehaviorType.AfterSilence, duration: 1000 }
+            end: { behavior: EndBehaviorType.AfterSilence, duration: 1200 }
         });
 
-        const decoder = new prism.opus.Decoder({ rate: 48000, channels: 1, frameSize: 960 });
+        // Fixed stereo decoding (rate: 48000, channels: 2)
+        const decoder = new prism.opus.Decoder({ rate: 48000, channels: 2, frameSize: 960 });
         const pcmChunks = [];
 
         opusStream.pipe(decoder);
@@ -236,26 +241,27 @@ function attachVoiceListener(connection) {
             processingUsers.delete(userId);
             const rawPcm = Buffer.concat(pcmChunks);
 
-            if (rawPcm.length < 16000) {
+            // Filter out tiny ambient noise (< 0.5s audio)
+            if (rawPcm.length < 32000) {
                 return;
             }
 
             if (!groq) {
-                console.error("❌ GROQ_API_KEY missing in environment variables!");
+                console.error("❌ GROQ_API_KEY missing in Railway Environment Variables!");
                 return;
             }
 
-            const wavBuffer = writeWavHeader(48000, 1, rawPcm);
+            const wavBuffer = writeWavHeader(48000, 2, rawPcm);
             const wavPath = path.join(__dirname, `voice_${userId}_${Date.now()}.wav`);
             fs.writeFileSync(wavPath, wavBuffer);
 
             try {
-                console.log("⚡ Sending audio to Groq Whisper...");
+                console.log("⚡ Transcribing audio via Groq Whisper...");
                 const transcription = await groq.audio.transcriptions.create({
                     file: fs.createReadStream(wavPath),
                     model: 'whisper-large-v3-turbo',
                     response_format: 'json',
-                    language: 'hi'
+                    prompt: 'Hinglish, Roman Urdu, English conversation between friends.'
                 });
 
                 if (fs.existsSync(wavPath)) fs.unlinkSync(wavPath);
@@ -264,7 +270,7 @@ function attachVoiceListener(connection) {
                 
                 if (recognizedText.length > 1) {
                     console.log(`🗣️ User Said: "${recognizedText}"`);
-                    const aiReply = await askAI(recognizedText, "User spoke via VC mic. Keep response very short and natural (1-2 lines).");
+                    const aiReply = await askAI(recognizedText, "User spoke in VC. Give a short 1-line natural friendly reply in the same language.");
                     console.log(`🤖 Bot Responding: "${aiReply}"`);
                     await playSpeechInVC(connection, aiReply);
                 }
@@ -309,7 +315,7 @@ client.on('messageCreate', async (message) => {
         return;
     }
 
-    // 2. !joinvc COMMAND (STABLE FIX FOR DISCORD JS VOICE)
+    // 2. !joinvc COMMAND
     if (contentLower.startsWith('!joinvc')) {
         let voiceChannel = message.mentions.channels.first() || message.member?.voice?.channel;
 
@@ -318,7 +324,6 @@ client.on('messageCreate', async (message) => {
         }
 
         try {
-            // Clean up old connection if exists
             let existingConnection = activeConnections.get(message.guild.id) || getVoiceConnection(message.guild.id);
             if (existingConnection) {
                 try { existingConnection.destroy(); } catch (e) {}
@@ -333,7 +338,6 @@ client.on('messageCreate', async (message) => {
                 selfMute: false
             });
 
-            // Handshake timeout bypass
             try {
                 await Promise.race([
                     entersState(connection, VoiceConnectionStatus.Ready, 30_000),
@@ -409,7 +413,7 @@ client.on('messageCreate', async (message) => {
 
     const cleanPrompt = message.content.replace(/<@!?\d+>/g, '').trim();
     const isEnglish = /^[a-zA-Z0-9\s.,?!'\-]+$/.test(cleanPrompt) && !cleanPrompt.includes('karo') && !cleanPrompt.includes('hai');
-    const langContext = isEnglish ? "Reply STRICTLY in English." : "Reply STRICTLY in Roman Urdu / Hindi with masculine tone.";
+    const langContext = isEnglish ? "Reply STRICTLY in English." : "Reply STRICTLY in Roman Urdu / Hinglish with masculine tone.";
 
     // 6. QUICK LINKS CHECK
     if (contentLower.includes('link') || contentLower.includes('links')) {
