@@ -1,11 +1,11 @@
 // ===================================================
-// HERRY CHAT BOT - REALTIME VC VOICE ENGINE (STT, TTS & CHARACTER SYSTEM)
+// HERRY CHAT BOT - REALTIME VC WALKIE-TALKIE VOICE ENGINE
 // ===================================================
 
 const ffmpeg = require('ffmpeg-static');
 process.env.FFMPEG_PATH = ffmpeg;
 
-const { Client, GatewayIntentBits, Partials, PermissionsBitField, EmbedBuilder } = require('discord.js');
+const { Client, GatewayIntentBits, Partials, PermissionsBitField } = require('discord.js');
 const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus, EndBehaviorType, getVoiceConnection, VoiceConnectionStatus, entersState } = require('@discordjs/voice');
 const Groq = require('groq-sdk');
 const gTTS = require('gtts');
@@ -26,6 +26,7 @@ const client = new Client({
     partials: [Partials.Channel, Partials.Message, Partials.GuildMember]
 });
 
+// INITIALIZE GROQ CLIENT
 const groq = process.env.GROQ_API_KEY ? new Groq({ apiKey: process.env.GROQ_API_KEY }) : null;
 
 // ACTIVE VOICE CONNECTIONS MAP
@@ -76,7 +77,7 @@ STRICT PERSONA RULES:
 3. EXACT LANGUAGE MATCHING:
    - If user speaks/writes in English, reply STRICTLY in English.
    - If user speaks/writes in Roman Urdu / Hinglish, reply STRICTLY in Roman Urdu / Hinglish.
-4. Keep replies direct, ultra-short, natural and friendly (1 line max for voice).
+4. Keep replies direct, ultra-short, natural and friendly (1 short line max for voice).
 `;
 
 // HELPER: PCM to WAV Converter for Groq Whisper
@@ -98,9 +99,11 @@ function writeWavHeader(sampleRate, numChannels, pcmBuffer) {
     return Buffer.concat([header, pcmBuffer]);
 }
 
+// STEP 2 IN GUIDE: ASK AI USING GROQ OR OPENROUTER FREE MODELS
 async function askAI(userPrompt, extraContext = "") {
     const fullSystemMessage = `${BOT_SYSTEM_PROMPT}\nUser Context: ${extraContext}`;
 
+    // 1. Try Groq Free LLM Model First
     if (groq) {
         try {
             const groqResponse = await groq.chat.completions.create({
@@ -117,37 +120,40 @@ async function askAI(userPrompt, extraContext = "") {
                 return groqResponse.choices[0].message.content;
             }
         } catch (err) {
-            console.warn('⚠️ Groq Primary Failed. Routing to OpenRouter...');
+            console.warn('⚠️ Groq Primary LLM Failed. Switching to OpenRouter Free...');
         }
     }
 
-    try {
-        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-                'HTTP-Referer': 'https://railway.app',
-                'X-Title': 'HerryChatBot',
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                model: 'openrouter/free',
-                messages: [
-                    { role: 'system', content: fullSystemMessage },
-                    { role: 'user', content: userPrompt }
-                ]
-            })
-        });
+    // 2. OpenRouter Free Model Fallback (meta-llama/llama-3.2-3b-instruct:free or openrouter/free)
+    if (process.env.OPENROUTER_API_KEY) {
+        try {
+            const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+                    'HTTP-Referer': 'https://railway.app',
+                    'X-Title': 'HerryChatBot',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    model: 'meta-llama/llama-3.2-3b-instruct:free',
+                    messages: [
+                        { role: 'system', content: fullSystemMessage },
+                        { role: 'user', content: userPrompt }
+                    ]
+                })
+            });
 
-        const data = await response.json();
-        if (data.choices && data.choices[0]?.message?.content) {
-            return data.choices[0].message.content;
+            const data = await response.json();
+            if (data.choices && data.choices[0]?.message?.content) {
+                return data.choices[0].message.content;
+            }
+        } catch (openRouterErr) {
+            console.error('❌ OpenRouter Error:', openRouterErr);
         }
-    } catch (openRouterErr) {
-        console.error('❌ OpenRouter Error:', openRouterErr);
     }
 
-    return "Bhai server issue hai, thodi der baad baat karte hain!";
+    return "Bhai network issue chal raha hai, thodi der baad bolna!";
 }
 
 async function askVisionAI(userPrompt, imageUrl, userLanguageContext) {
@@ -185,10 +191,10 @@ async function askVisionAI(userPrompt, imageUrl, userLanguageContext) {
         console.warn('⚠️ Vision processing error.');
     }
 
-    return "❌ Image scan karne me issue aaya hai! Dubara send kar.";
+    return "❌ Image scan nahi ho saki!";
 }
 
-// PLAY AUDIO IN VC
+// PLAY AUDIO RESPONSE IN VC (TTS Engine)
 async function playSpeechInVC(connection, text, guildId) {
     return new Promise((resolve) => {
         const cleanText = text.replace(/[*_#~`]/g, '').trim();
@@ -221,8 +227,7 @@ async function playSpeechInVC(connection, text, guildId) {
         });
     });
 }
-
-// ATTACH VC LISTEN ENGINE (STABLE VOICE LISTENER)
+// STEP 3 IN GUIDE: WALKIE-TALKIE REALTIME VOICE LISTENER
 const processingUsers = new Set();
 
 function attachVoiceListener(connection, guildId) {
@@ -232,8 +237,9 @@ function attachVoiceListener(connection, guildId) {
         if (processingUsers.has(userId)) return;
         processingUsers.add(userId);
 
-        console.log(`🎙️ Speaking event detected for user: ${userId}`);
+        console.log(`🎙️ User (${userId}) is speaking...`);
 
+        // Capture voice stream until user stops speaking (silence detection)
         const opusStream = receiver.subscribe(userId, {
             end: { behavior: EndBehaviorType.AfterSilence, duration: 1000 }
         });
@@ -256,25 +262,27 @@ function attachVoiceListener(connection, guildId) {
             processingUsers.delete(userId);
             const rawPcm = Buffer.concat(pcmChunks);
 
-            // Minimum audio check (~0.3 seconds)
+            // Filter out empty background noise
             if (rawPcm.length < 20000) {
                 return;
             }
 
             if (!groq) {
-                console.error("❌ GROQ_API_KEY is missing in Railway Variables!");
+                console.error("❌ GROQ_API_KEY is missing! Add it in Railway Variables.");
                 return;
             }
 
             const wavBuffer = writeWavHeader(48000, 2, rawPcm);
-            const wavPath = path.join(__dirname, `voice_${userId}_${Date.now()}.wav`);
+            const wavPath = path.join(__dirname, `user_voice_${userId}_${Date.now()}.wav`);
             fs.writeFileSync(wavPath, wavBuffer);
 
             try {
-                console.log("⚡ Processing audio with Groq Whisper...");
+                console.log("⚡ Transcribing audio via Groq Whisper (whisper-large-v3)...");
+                
+                // STEP 3 STT: Transcribe using exact model from guide
                 const transcription = await groq.audio.transcriptions.create({
                     file: fs.createReadStream(wavPath),
-                    model: 'whisper-large-v3-turbo',
+                    model: 'whisper-large-v3',
                     response_format: 'json',
                     prompt: 'Hinglish, Roman Urdu, English conversation.'
                 });
@@ -285,13 +293,17 @@ function attachVoiceListener(connection, guildId) {
                 
                 if (recognizedText.length > 0) {
                     console.log(`🗣️ User Said: "${recognizedText}"`);
+                    
+                    // STEP 3 AI Response
                     const aiReply = await askAI(recognizedText, "User spoke in VC. Reply naturally in 1 short line in Roman Urdu/Hindi.");
-                    console.log(`🤖 Bot Responding: "${aiReply}"`);
+                    console.log(`🤖 Bot Reply: "${aiReply}"`);
+                    
+                    // STEP 3 Playback Voice in VC
                     await playSpeechInVC(connection, aiReply, guildId);
                 }
             } catch (wErr) {
                 if (fs.existsSync(wavPath)) fs.unlinkSync(wavPath);
-                console.error("❌ Whisper Error:", wErr);
+                console.error("❌ Groq Whisper STT Error:", wErr);
             }
         });
     });
@@ -317,7 +329,7 @@ client.on('messageCreate', async (message) => {
         try {
             if (message.member && message.member.moderatable) {
                 await message.member.timeout(24 * 60 * 60 * 1000, 'Abusive Language');
-                await message.reply(`⚠️ ${message.author} ko **Abuse** ki wajah se **24 Ghante (1 Day)** ka Timeout de diya gaya hai!`);
+                await message.reply(`⚠️ ${message.author} ko **Abuse** ki वजह se **24 Ghante (1 Day)** ka Timeout de diya gaya hai!`);
             } else {
                 await message.reply(`Abe oye ${message.author}, tameez se baat kar!`);
             }
@@ -385,10 +397,10 @@ client.on('messageCreate', async (message) => {
             attachVoiceListener(connection, message.guild.id);
 
             const currentChar = getGuildCharacter(message.guild.id);
-            return message.reply(`🎙️ **${currentChar.name}** **${voiceChannel.name}** VC me aa gaya hai! Ab mic un-mute karo aur **'Hello'** bol ke test karo.`);
+            return message.reply(`🎙️ **${currentChar.name}** **${voiceChannel.name}** VC me walkie-talkie mode me active hai! Mic un-mute karke bolna shuru karo.`);
         } catch (error) {
             console.error('VC Connection Error:', error);
-            return message.reply('❌ VC Connect hone me issue aaya! Check karein ki bot ke paas VC Join/Speak ki permission hai ya nahi.');
+            return message.reply('❌ VC Connect hone me issue aaya! Check karein ki bot ke paas VC Join/Speak ki permission hai.');
         }
     }
 
@@ -433,8 +445,7 @@ client.on('messageCreate', async (message) => {
         message.member.permissions.has(PermissionsBitField.Flags.Administrator) ||
         message.member.permissions.has(PermissionsBitField.Flags.ManageGuild)
     ) : false;
-
-    const cleanPrompt = message.content.replace(/<@!?\d+>/g, '').trim();
+const cleanPrompt = message.content.replace(/<@!?\d+>/g, '').trim();
     const isEnglish = /^[a-zA-Z0-9\s.,?!'\-]+$/.test(cleanPrompt) && !cleanPrompt.includes('karo') && !cleanPrompt.includes('hai');
     const langContext = isEnglish ? "Reply STRICTLY in English." : "Reply STRICTLY in Roman Urdu / Hinglish with masculine tone.";
 
