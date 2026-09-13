@@ -6,7 +6,17 @@ const ffmpeg = require('ffmpeg-static');
 process.env.FFMPEG_PATH = ffmpeg;
 
 const { Client, GatewayIntentBits, Partials, PermissionsBitField } = require('discord.js');
-const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus, EndBehaviorType, getVoiceConnection, VoiceConnectionStatus, entersState } = require('@discordjs/voice');
+const { 
+    joinVoiceChannel, 
+    createAudioPlayer, 
+    createAudioResource, 
+    AudioPlayerStatus, 
+    EndBehaviorType, 
+    getVoiceConnection, 
+    VoiceConnectionStatus, 
+    entersState,
+    StreamType
+} = require('@discordjs/voice');
 const Groq = require('groq-sdk');
 const gTTS = require('gtts');
 const fs = require('fs');
@@ -99,11 +109,10 @@ function writeWavHeader(sampleRate, numChannels, pcmBuffer) {
     return Buffer.concat([header, pcmBuffer]);
 }
 
-// STEP 2 IN GUIDE: ASK AI USING GROQ OR OPENROUTER FREE MODELS
+// ASK AI USING GROQ OR OPENROUTER FREE MODELS
 async function askAI(userPrompt, extraContext = "") {
     const fullSystemMessage = `${BOT_SYSTEM_PROMPT}\nUser Context: ${extraContext}`;
 
-    // 1. Try Groq Free LLM Model First
     if (groq) {
         try {
             const groqResponse = await groq.chat.completions.create({
@@ -124,7 +133,6 @@ async function askAI(userPrompt, extraContext = "") {
         }
     }
 
-    // 2. OpenRouter Free Model Fallback (meta-llama/llama-3.2-3b-instruct:free or openrouter/free)
     if (process.env.OPENROUTER_API_KEY) {
         try {
             const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -194,40 +202,51 @@ async function askVisionAI(userPrompt, imageUrl, userLanguageContext) {
     return "❌ Image scan nahi ho saki!";
 }
 
-// PLAY AUDIO RESPONSE IN VC (TTS Engine)
+// PLAY AUDIO RESPONSE IN VC (AUDIO PIPE FIX FOR RAILWAY)
 async function playSpeechInVC(connection, text, guildId) {
     return new Promise((resolve) => {
-        const cleanText = text.replace(/[*_#~`]/g, '').trim();
-        const tempMp3Path = path.join(__dirname, `speech_${Date.now()}.mp3`);
-        
-        const charConfig = getGuildCharacter(guildId);
-        const speech = new gTTS(cleanText, charConfig.lang);
+        try {
+            const cleanText = text.replace(/[*_#~`]/g, '').trim();
+            const tempMp3Path = path.join(__dirname, `speech_${Date.now()}.mp3`);
+            
+            const charConfig = getGuildCharacter(guildId);
+            const speech = new gTTS(cleanText, charConfig.lang);
 
-        speech.save(tempMp3Path, (err) => {
-            if (err) {
-                console.error("❌ gTTS Error:", err);
-                return resolve();
-            }
+            speech.save(tempMp3Path, (err) => {
+                if (err) {
+                    console.error("❌ gTTS Error:", err);
+                    return resolve();
+                }
 
-            const player = createAudioPlayer();
-            const resource = createAudioResource(tempMp3Path);
-            player.play(resource);
-            connection.subscribe(player);
+                // FFmpeg arbitrary input handling to fix broken audio stream
+                const resource = createAudioResource(tempMp3Path, {
+                    inputType: StreamType.Arbitrary,
+                    inlineVolume: true
+                });
 
-            player.on(AudioPlayerStatus.Idle, () => {
-                if (fs.existsSync(tempMp3Path)) fs.unlinkSync(tempMp3Path);
-                resolve();
+                const player = createAudioPlayer();
+                connection.subscribe(player);
+                player.play(resource);
+
+                player.on(AudioPlayerStatus.Idle, () => {
+                    if (fs.existsSync(tempMp3Path)) fs.unlinkSync(tempMp3Path);
+                    resolve();
+                });
+
+                player.on('error', (error) => {
+                    console.error("❌ Audio Player Error:", error);
+                    if (fs.existsSync(tempMp3Path)) fs.unlinkSync(tempMp3Path);
+                    resolve();
+                });
             });
-
-            player.on('error', (error) => {
-                console.error("❌ Audio Player Error:", error);
-                if (fs.existsSync(tempMp3Path)) fs.unlinkSync(tempMp3Path);
-                resolve();
-            });
-        });
+        } catch (e) {
+            console.error("❌ PlaySpeech Exception:", e);
+            resolve();
+        }
     });
 }
-// STEP 3 IN GUIDE: WALKIE-TALKIE REALTIME VOICE LISTENER
+
+// WALKIE-TALKIE REALTIME VOICE LISTENER
 const processingUsers = new Set();
 
 function attachVoiceListener(connection, guildId) {
@@ -239,7 +258,6 @@ function attachVoiceListener(connection, guildId) {
 
         console.log(`🎙️ User (${userId}) is speaking...`);
 
-        // Capture voice stream until user stops speaking (silence detection)
         const opusStream = receiver.subscribe(userId, {
             end: { behavior: EndBehaviorType.AfterSilence, duration: 1000 }
         });
@@ -262,7 +280,6 @@ function attachVoiceListener(connection, guildId) {
             processingUsers.delete(userId);
             const rawPcm = Buffer.concat(pcmChunks);
 
-            // Filter out empty background noise
             if (rawPcm.length < 20000) {
                 return;
             }
@@ -277,9 +294,8 @@ function attachVoiceListener(connection, guildId) {
             fs.writeFileSync(wavPath, wavBuffer);
 
             try {
-                console.log("⚡ Transcribing audio via Groq Whisper (whisper-large-v3)...");
+                console.log("⚡ Transcribing audio via Groq Whisper...");
                 
-                // STEP 3 STT: Transcribe using exact model from guide
                 const transcription = await groq.audio.transcriptions.create({
                     file: fs.createReadStream(wavPath),
                     model: 'whisper-large-v3',
@@ -294,11 +310,9 @@ function attachVoiceListener(connection, guildId) {
                 if (recognizedText.length > 0) {
                     console.log(`🗣️ User Said: "${recognizedText}"`);
                     
-                    // STEP 3 AI Response
                     const aiReply = await askAI(recognizedText, "User spoke in VC. Reply naturally in 1 short line in Roman Urdu/Hindi.");
                     console.log(`🤖 Bot Reply: "${aiReply}"`);
                     
-                    // STEP 3 Playback Voice in VC
                     await playSpeechInVC(connection, aiReply, guildId);
                 }
             } catch (wErr) {
@@ -329,7 +343,7 @@ client.on('messageCreate', async (message) => {
         try {
             if (message.member && message.member.moderatable) {
                 await message.member.timeout(24 * 60 * 60 * 1000, 'Abusive Language');
-                await message.reply(`⚠️ ${message.author} ko **Abuse** ki वजह se **24 Ghante (1 Day)** ka Timeout de diya gaya hai!`);
+                await message.reply(`⚠️ ${message.author} ko **Abuse** ki waja se **24 Ghante (1 Day)** ka Timeout de diya gaya hai!`);
             } else {
                 await message.reply(`Abe oye ${message.author}, tameez se baat kar!`);
             }
@@ -445,7 +459,7 @@ client.on('messageCreate', async (message) => {
         message.member.permissions.has(PermissionsBitField.Flags.Administrator) ||
         message.member.permissions.has(PermissionsBitField.Flags.ManageGuild)
     ) : false;
-const cleanPrompt = message.content.replace(/<@!?\d+>/g, '').trim();
+    const cleanPrompt = message.content.replace(/<@!?\d+>/g, '').trim();
     const isEnglish = /^[a-zA-Z0-9\s.,?!'\-]+$/.test(cleanPrompt) && !cleanPrompt.includes('karo') && !cleanPrompt.includes('hai');
     const langContext = isEnglish ? "Reply STRICTLY in English." : "Reply STRICTLY in Roman Urdu / Hinglish with masculine tone.";
 
