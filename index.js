@@ -1,5 +1,5 @@
 // ===================================================
-// HERRY CHAT BOT - REALTIME VC VOICE ENGINE (STT & TTS FIXED)
+// HERRY CHAT BOT - REALTIME VC VOICE ENGINE (STT, TTS & CHARACTER SYSTEM)
 // ===================================================
 
 const ffmpeg = require('ffmpeg-static');
@@ -29,6 +29,19 @@ const groq = process.env.GROQ_API_KEY ? new Groq({ apiKey: process.env.GROQ_API_
 
 // ACTIVE VOICE CONNECTIONS MAP
 const activeConnections = new Map();
+
+// FREE CHARACTER VOICE STATE MANAGEMENT
+const guildCharacterSettings = new Map();
+
+function getGuildCharacter(guildId) {
+    if (!guildCharacterSettings.has(guildId)) {
+        guildCharacterSettings.set(guildId, {
+            name: 'Herry AI (Urdu/Hindi)',
+            lang: 'hi'
+        });
+    }
+    return guildCharacterSettings.get(guildId);
+}
 
 // DYNAMIC LINKS MAP
 const LINKS_MAP = [
@@ -65,7 +78,7 @@ STRICT PERSONA RULES:
 4. Keep replies direct, ultra-short, natural and friendly (1 line max for voice).
 `;
 
-// HELPER: PCM to WAV Converter for Groq Whisper Compatibility (Stereo 48kHz, 16-bit)
+// HELPER: PCM to WAV Converter for Groq Whisper
 function writeWavHeader(sampleRate, numChannels, pcmBuffer) {
     const header = Buffer.alloc(44);
     header.write('RIFF', 0);
@@ -174,17 +187,14 @@ async function askVisionAI(userPrompt, imageUrl, userLanguageContext) {
     return "❌ Image scan karne me issue aaya hai! Dubara send kar.";
 }
 
-// PLAY AUDIO IN VC (TTS WITH ENGLISH / HINDI HYBRID SUPPORT)
-async function playSpeechInVC(connection, text) {
+// PLAY AUDIO IN VC (WITH DYNAMIC FREE CHARACTER VOICE SUPPORT)
+async function playSpeechInVC(connection, text, guildId) {
     return new Promise((resolve) => {
         const cleanText = text.replace(/[*_#~`]/g, '').trim();
         const tempMp3Path = path.join(__dirname, `speech_${Date.now()}.mp3`);
         
-        // Auto-detect accent for TTS
-        const isPureEnglish = /^[a-zA-Z0-9\s.,?!'\-]+$/.test(cleanText) && !cleanText.includes('karo') && !cleanText.includes('hai') && !cleanText.includes('bhai');
-        const langCode = isPureEnglish ? 'en' : 'hi';
-
-        const speech = new gTTS(cleanText, langCode);
+        const charConfig = getGuildCharacter(guildId);
+        const speech = new gTTS(cleanText, charConfig.lang);
 
         speech.save(tempMp3Path, (err) => {
             if (err) {
@@ -211,10 +221,10 @@ async function playSpeechInVC(connection, text) {
     });
 }
 
-// ATTACH VC LISTEN ENGINE (PROPER OPUS DECODING + WHISPER)
+// ATTACH VC LISTEN ENGINE
 const processingUsers = new Set();
 
-function attachVoiceListener(connection) {
+function attachVoiceListener(connection, guildId) {
     const receiver = connection.receiver;
 
     receiver.speaking.on('start', (userId) => {
@@ -227,7 +237,6 @@ function attachVoiceListener(connection) {
             end: { behavior: EndBehaviorType.AfterSilence, duration: 1200 }
         });
 
-        // Fixed stereo decoding (rate: 48000, channels: 2)
         const decoder = new prism.opus.Decoder({ rate: 48000, channels: 2, frameSize: 960 });
         const pcmChunks = [];
 
@@ -241,7 +250,6 @@ function attachVoiceListener(connection) {
             processingUsers.delete(userId);
             const rawPcm = Buffer.concat(pcmChunks);
 
-            // Filter out tiny ambient noise (< 0.5s audio)
             if (rawPcm.length < 32000) {
                 return;
             }
@@ -272,7 +280,7 @@ function attachVoiceListener(connection) {
                     console.log(`🗣️ User Said: "${recognizedText}"`);
                     const aiReply = await askAI(recognizedText, "User spoke in VC. Give a short 1-line natural friendly reply in the same language.");
                     console.log(`🤖 Bot Responding: "${aiReply}"`);
-                    await playSpeechInVC(connection, aiReply);
+                    await playSpeechInVC(connection, aiReply, guildId);
                 }
             } catch (wErr) {
                 if (fs.existsSync(wavPath)) fs.unlinkSync(wavPath);
@@ -289,7 +297,7 @@ function attachVoiceListener(connection) {
 
 client.once('ready', () => {
     console.log(`🤖 [HERRY CHAT BOT] Online as ${client.user.tag}`);
-    client.user.setActivity('HerryHacks | !joinvc | !say', { type: 3 });
+    client.user.setActivity('HerryHacks | !joinvc | !character', { type: 3 });
 });
 
 client.on('messageCreate', async (message) => {
@@ -315,7 +323,31 @@ client.on('messageCreate', async (message) => {
         return;
     }
 
-    // 2. !joinvc COMMAND
+    // 2. !character COMMAND (NEW FREE CHARACTER VOICE SYSTEM)
+    if (contentLower.startsWith('!character')) {
+        const args = contentLower.split(/\s+/);
+        const charType = args[1];
+
+        const charConfig = getGuildCharacter(message.guild.id);
+
+        if (charType === 'hi' || charType === 'urdu') {
+            charConfig.name = "Herry AI (Urdu/Hindi)";
+            charConfig.lang = "hi";
+            return message.reply("✅ Voice Character set to: **Herry AI (Urdu/Hindi)**");
+        } else if (charType === 'en' || charType === 'english') {
+            charConfig.name = "Jarvis AI (English)";
+            charConfig.lang = "en";
+            return message.reply("✅ Voice Character set to: **Jarvis AI (English)**");
+        } else if (charType === 'ja' || charType === 'anime') {
+            charConfig.name = "Anime AI (Japanese)";
+            charConfig.lang = "ja";
+            return message.reply("✅ Voice Character set to: **Anime Character (Japanese Accent)**");
+        } else {
+            return message.reply("ℹ️ **Voice Character Options:**\n• `!character urdu` - Roman Urdu / Hindi\n• `!character en` - English Accent\n• `!character anime` - Anime Style");
+        }
+    }
+
+    // 3. !joinvc COMMAND
     if (contentLower.startsWith('!joinvc')) {
         let voiceChannel = message.mentions.channels.first() || message.member?.voice?.channel;
 
@@ -348,28 +380,17 @@ client.on('messageCreate', async (message) => {
             }
 
             activeConnections.set(message.guild.id, connection);
-            attachVoiceListener(connection);
+            attachVoiceListener(connection, message.guild.id);
 
-            connection.on(VoiceConnectionStatus.Disconnected, async () => {
-                try {
-                    await Promise.race([
-                        entersState(connection, VoiceConnectionStatus.Signalling, 5_000),
-                        entersState(connection, VoiceConnectionStatus.Connecting, 5_000),
-                    ]);
-                } catch (error) {
-                    connection.destroy();
-                    activeConnections.delete(message.guild.id);
-                }
-            });
-
-            return message.reply(`🎙️ Main **${voiceChannel.name}** VC me aa gaya hoon! Ab mic khol ke bolo, main jawab dunga.`);
+            const currentChar = getGuildCharacter(message.guild.id);
+            return message.reply(`🎙️ **${currentChar.name}** **${voiceChannel.name}** VC me aa gaya hai! Mic khol kar baat karo.`);
         } catch (error) {
             console.error('VC Connection Error:', error);
             return message.reply('❌ VC Connect hone me issue aaya! Kripya check karein ki bot ke paas VC Join/Speak ki permission hai ya nahi.');
         }
     }
 
-    // 3. !leavevc COMMAND
+    // 4. !leavevc COMMAND
     if (contentLower === '!leavevc') {
         const connection = activeConnections.get(message.guild.id) || getVoiceConnection(message.guild.id);
         if (connection) {
@@ -381,7 +402,7 @@ client.on('messageCreate', async (message) => {
         }
     }
 
-    // 4. !say COMMAND
+    // 5. !say COMMAND
     if (contentLower.startsWith('!say')) {
         const textToSay = message.content.slice(4).trim();
         const connection = activeConnections.get(message.guild.id) || getVoiceConnection(message.guild.id);
@@ -394,14 +415,14 @@ client.on('messageCreate', async (message) => {
             return message.reply("❌ Text bhi likho! Example: `!say Hello bhai`");
         }
 
-        await playSpeechInVC(connection, textToSay);
+        await playSpeechInVC(connection, textToSay, message.guild.id);
         return message.reply(`🗣️ VC me bol diya: "${textToSay}"`);
     }
 
     // BOT TAG CHECK FOR TEXT CHAT
     if (!message.mentions.has(client.user)) return;
 
-    // 5. SECURITY BLOCK
+    // 6. SECURITY BLOCK
     if (SECURITY_BLOCK_KEYWORDS.some(kw => contentLower.includes(kw))) {
         return message.reply(`Bakchodi mat kar!`);
     }
@@ -415,7 +436,7 @@ client.on('messageCreate', async (message) => {
     const isEnglish = /^[a-zA-Z0-9\s.,?!'\-]+$/.test(cleanPrompt) && !cleanPrompt.includes('karo') && !cleanPrompt.includes('hai');
     const langContext = isEnglish ? "Reply STRICTLY in English." : "Reply STRICTLY in Roman Urdu / Hinglish with masculine tone.";
 
-    // 6. QUICK LINKS CHECK
+    // 7. QUICK LINKS CHECK
     if (contentLower.includes('link') || contentLower.includes('links')) {
         for (const item of LINKS_MAP) {
             if (item.keywords.some(kw => contentLower.includes(kw))) {
@@ -425,7 +446,7 @@ client.on('messageCreate', async (message) => {
         }
     }
 
-    // 7. IMAGE ATTACHMENT SCANNER
+    // 8. IMAGE ATTACHMENT SCANNER
     if (message.attachments.size > 0) {
         const image = message.attachments.first();
         if (image.contentType && image.contentType.startsWith('image/')) {
@@ -435,7 +456,7 @@ client.on('messageCreate', async (message) => {
         }
     }
 
-    // 8. TEXT RESPONSE
+    // 9. TEXT RESPONSE
     await message.channel.sendTyping();
     const reply = await askAI(cleanPrompt || "Hello", `User: ${message.author.username}, Lang: ${langContext}`);
 
