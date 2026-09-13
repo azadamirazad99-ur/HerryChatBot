@@ -1,21 +1,21 @@
 {
   "name": "herry-chat-bot",
   "version": "1.0.0",
-  "description": "Herry Chat Bot - Realtime VC Voice Engine & AI Assistant",
+  "description": "Herry Chat Bot - Realtime VC Voice Engine",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "@discordjs/opus": "^0.9.0",
     "@discordjs/voice": "^0.18.0",
     "axios": "^1.7.9",
     "discord.js": "^14.18.0",
     "dotenv": "^16.4.5",
     "ffmpeg-static": "^5.2.0",
     "groq-sdk": "^0.7.0",
-    "gtts": "^0.2.1",
+    "gTTS": "^0.2.1",
     "libsodium-wrappers": "^0.7.15",
+    "opusscript": "^0.0.8",
     "prism-media": "^1.3.5"
   },
   "engines": {
