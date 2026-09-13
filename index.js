@@ -12,6 +12,7 @@ const gTTS = require('gtts');
 const fs = require('fs');
 const path = require('path');
 const prism = require('prism-media');
+const { pipeline } = require('stream');
 require('dotenv').config();
 
 const client = new Client({
@@ -187,7 +188,7 @@ async function askVisionAI(userPrompt, imageUrl, userLanguageContext) {
     return "❌ Image scan karne me issue aaya hai! Dubara send kar.";
 }
 
-// PLAY AUDIO IN VC (WITH DYNAMIC FREE CHARACTER VOICE SUPPORT)
+// PLAY AUDIO IN VC
 async function playSpeechInVC(connection, text, guildId) {
     return new Promise((resolve) => {
         const cleanText = text.replace(/[*_#~`]/g, '').trim();
@@ -221,7 +222,7 @@ async function playSpeechInVC(connection, text, guildId) {
     });
 }
 
-// ATTACH VC LISTEN ENGINE
+// ATTACH VC LISTEN ENGINE (STABLE VOICE LISTENER)
 const processingUsers = new Set();
 
 function attachVoiceListener(connection, guildId) {
@@ -231,16 +232,21 @@ function attachVoiceListener(connection, guildId) {
         if (processingUsers.has(userId)) return;
         processingUsers.add(userId);
 
-        console.log(`🎙️ Listening to user: ${userId}`);
+        console.log(`🎙️ Speaking event detected for user: ${userId}`);
 
         const opusStream = receiver.subscribe(userId, {
-            end: { behavior: EndBehaviorType.AfterSilence, duration: 1200 }
+            end: { behavior: EndBehaviorType.AfterSilence, duration: 1000 }
         });
 
         const decoder = new prism.opus.Decoder({ rate: 48000, channels: 2, frameSize: 960 });
         const pcmChunks = [];
 
-        opusStream.pipe(decoder);
+        pipeline(opusStream, decoder, (err) => {
+            if (err) {
+                console.error("❌ Stream Pipeline Error:", err);
+                processingUsers.delete(userId);
+            }
+        });
 
         decoder.on('data', (chunk) => {
             pcmChunks.push(chunk);
@@ -250,12 +256,13 @@ function attachVoiceListener(connection, guildId) {
             processingUsers.delete(userId);
             const rawPcm = Buffer.concat(pcmChunks);
 
-            if (rawPcm.length < 32000) {
+            // Minimum audio check (~0.3 seconds)
+            if (rawPcm.length < 20000) {
                 return;
             }
 
             if (!groq) {
-                console.error("❌ GROQ_API_KEY missing in Railway Environment Variables!");
+                console.error("❌ GROQ_API_KEY is missing in Railway Variables!");
                 return;
             }
 
@@ -264,33 +271,28 @@ function attachVoiceListener(connection, guildId) {
             fs.writeFileSync(wavPath, wavBuffer);
 
             try {
-                console.log("⚡ Transcribing audio via Groq Whisper...");
+                console.log("⚡ Processing audio with Groq Whisper...");
                 const transcription = await groq.audio.transcriptions.create({
                     file: fs.createReadStream(wavPath),
                     model: 'whisper-large-v3-turbo',
                     response_format: 'json',
-                    prompt: 'Hinglish, Roman Urdu, English conversation between friends.'
+                    prompt: 'Hinglish, Roman Urdu, English conversation.'
                 });
 
                 if (fs.existsSync(wavPath)) fs.unlinkSync(wavPath);
 
                 const recognizedText = transcription.text ? transcription.text.trim() : "";
                 
-                if (recognizedText.length > 1) {
+                if (recognizedText.length > 0) {
                     console.log(`🗣️ User Said: "${recognizedText}"`);
-                    const aiReply = await askAI(recognizedText, "User spoke in VC. Give a short 1-line natural friendly reply in the same language.");
+                    const aiReply = await askAI(recognizedText, "User spoke in VC. Reply naturally in 1 short line in Roman Urdu/Hindi.");
                     console.log(`🤖 Bot Responding: "${aiReply}"`);
                     await playSpeechInVC(connection, aiReply, guildId);
                 }
             } catch (wErr) {
                 if (fs.existsSync(wavPath)) fs.unlinkSync(wavPath);
-                console.error("❌ Whisper Transcription Error:", wErr);
+                console.error("❌ Whisper Error:", wErr);
             }
-        });
-
-        opusStream.on('error', (err) => {
-            processingUsers.delete(userId);
-            console.error("❌ Opus Stream Error:", err);
         });
     });
 }
@@ -323,7 +325,7 @@ client.on('messageCreate', async (message) => {
         return;
     }
 
-    // 2. !character COMMAND (NEW FREE CHARACTER VOICE SYSTEM)
+    // 2. !character COMMAND
     if (contentLower.startsWith('!character')) {
         const args = contentLower.split(/\s+/);
         const charType = args[1];
@@ -383,10 +385,10 @@ client.on('messageCreate', async (message) => {
             attachVoiceListener(connection, message.guild.id);
 
             const currentChar = getGuildCharacter(message.guild.id);
-            return message.reply(`🎙️ **${currentChar.name}** **${voiceChannel.name}** VC me aa gaya hai! Mic khol kar baat karo.`);
+            return message.reply(`🎙️ **${currentChar.name}** **${voiceChannel.name}** VC me aa gaya hai! Ab mic un-mute karo aur **'Hello'** bol ke test karo.`);
         } catch (error) {
             console.error('VC Connection Error:', error);
-            return message.reply('❌ VC Connect hone me issue aaya! Kripya check karein ki bot ke paas VC Join/Speak ki permission hai ya nahi.');
+            return message.reply('❌ VC Connect hone me issue aaya! Check karein ki bot ke paas VC Join/Speak ki permission hai ya nahi.');
         }
     }
 
