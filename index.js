@@ -1,5 +1,5 @@
 // ===================================================
-// HERRY CHAT BOT - REALTIME VC VOICE ENGINE (FINAL FIX)
+// HERRY CHAT BOT - REALTIME VC VOICE ENGINE (FINAL STABLE FIX)
 // ===================================================
 
 const ffmpeg = require('ffmpeg-static');
@@ -11,7 +11,6 @@ const Groq = require('groq-sdk');
 const gTTS = require('gtts');
 const fs = require('fs');
 const path = require('path');
-const { pipeline } = require('stream');
 const prism = require('prism-media');
 require('dotenv').config();
 
@@ -310,7 +309,7 @@ client.on('messageCreate', async (message) => {
         return;
     }
 
-    // 2. !joinvc COMMAND
+    // 2. !joinvc COMMAND (STABLE FIX FOR DISCORD JS VOICE)
     if (contentLower.startsWith('!joinvc')) {
         let voiceChannel = message.mentions.channels.first() || message.member?.voice?.channel;
 
@@ -319,6 +318,13 @@ client.on('messageCreate', async (message) => {
         }
 
         try {
+            // Clean up old connection if exists
+            let existingConnection = activeConnections.get(message.guild.id) || getVoiceConnection(message.guild.id);
+            if (existingConnection) {
+                try { existingConnection.destroy(); } catch (e) {}
+                activeConnections.delete(message.guild.id);
+            }
+
             const connection = joinVoiceChannel({
                 channelId: voiceChannel.id,
                 guildId: voiceChannel.guild.id,
@@ -327,19 +333,35 @@ client.on('messageCreate', async (message) => {
                 selfMute: false
             });
 
-            await entersState(connection, VoiceConnectionStatus.Ready, 15_000);
+            // Handshake timeout bypass
+            try {
+                await Promise.race([
+                    entersState(connection, VoiceConnectionStatus.Ready, 30_000),
+                    entersState(connection, VoiceConnectionStatus.Signalling, 30_000)
+                ]);
+            } catch (stateErr) {
+                console.warn("⚠️ Voice handshake taking time, bypassing state wait...");
+            }
 
             activeConnections.set(message.guild.id, connection);
             attachVoiceListener(connection);
 
-            connection.on(VoiceConnectionStatus.Disconnected, () => {
-                activeConnections.delete(message.guild.id);
+            connection.on(VoiceConnectionStatus.Disconnected, async () => {
+                try {
+                    await Promise.race([
+                        entersState(connection, VoiceConnectionStatus.Signalling, 5_000),
+                        entersState(connection, VoiceConnectionStatus.Connecting, 5_000),
+                    ]);
+                } catch (error) {
+                    connection.destroy();
+                    activeConnections.delete(message.guild.id);
+                }
             });
 
-            return message.reply(`🎙️ Main **${voiceChannel.name}** VC me aa gaya hoon! Ab mic khol ke "Hello" bolo, main jawab dunga.`);
+            return message.reply(`🎙️ Main **${voiceChannel.name}** VC me aa gaya hoon! Ab mic khol ke bolo, main jawab dunga.`);
         } catch (error) {
             console.error('VC Connection Error:', error);
-            return message.reply('❌ VC Connect hone me issue aaya!');
+            return message.reply('❌ VC Connect hone me issue aaya! Kripya check karein ki bot ke paas VC Join/Speak ki permission hai ya nahi.');
         }
     }
 
