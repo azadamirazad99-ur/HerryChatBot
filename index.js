@@ -213,42 +213,83 @@ async function askAI(userPrompt, extraContext = "") {
     return "Boss network issue chal raha hai, thodi der baad batata hoon!";
 }
 
+// ASK VISION AI WITH GROQ & OPENROUTER FALLBACKS (ADDED FROM SCREENSHOT)
 async function askVisionAI(userPrompt, imageUrl, userLanguageContext) {
     const visionSystemPrompt = `${BOT_SYSTEM_PROMPT}\nLanguage Context:${userLanguageContext}`;
+    const promptText = userPrompt || 'Explain what is visible in this image.';
 
-    try {
-        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-                'HTTP-Referer': 'https://railway.app',
-                'X-Title': 'HerryChatBot',
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                model: 'google/gemma-4-31b-it:free',
-                messages: [
-                    { role: 'system', content: visionSystemPrompt },
-                    {
-                        role: 'user',
-                        content: [
-                            { type: 'text', text: userPrompt || 'Explain what is visible in this image.' },
-                            { type: 'image_url', image_url: { url: imageUrl } }
-                        ]
-                    }
-                ]
-            })
-        });
+    // 1. TRY GROQ VISION MODELS (PRIMARY & BACKUP)
+    if (groq) {
+        const groqVisionModels = [
+            'meta-llama/llama-4-scout-17b-16e-instruct',    // Recommended Primary (Fast, Image Grounding)
+            'meta-llama/llama-4-maverick-17b-128e-instruct' // Recommended Fallback (Better Image Understanding)
+        ];
 
-        const data = await response.json();
-        if (data.choices && data.choices[0]?.message?.content) {
-            return data.choices[0].message.content;
+        for (const modelId of groqVisionModels) {
+            try {
+                console.log(`📸 Trying Groq Vision Model: ${modelId}`);
+                const groqVisionResponse = await groq.chat.completions.create({
+                    messages: [
+                        { role: 'system', content: visionSystemPrompt },
+                        {
+                            role: 'user',
+                            content: [
+                                { type: 'text', text: promptText },
+                                { type: 'image_url', image_url: { url: imageUrl } }
+                            ]
+                        }
+                    ],
+                    model: modelId,
+                    temperature: 0.7,
+                    max_tokens: 300,
+                });
+
+                if (groqVisionResponse.choices && groqVisionResponse.choices[0]?.message?.content) {
+                    return groqVisionResponse.choices[0].message.content;
+                }
+            } catch (groqErr) {
+                console.warn(`⚠️ Groq Vision Model (${modelId}) failed or deprecated. Trying next option...`);
+            }
         }
-    } catch (err) {
-        console.warn('⚠️ Vision processing error.');
     }
 
-    return "❌ Image scan nahi ho saki!";
+    // 2. OPENROUTER VISION FALLBACK MODEL
+    if (process.env.OPENROUTER_API_KEY) {
+        try {
+            console.log('📸 Trying OpenRouter Vision Model: google/gemma-4-31b-it:free');
+            const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+                    'HTTP-Referer': 'https://railway.app',
+                    'X-Title': 'HerryChatBot',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    model: 'google/gemma-4-31b-it:free',
+                    messages: [
+                        { role: 'system', content: visionSystemPrompt },
+                        {
+                            role: 'user',
+                            content: [
+                                { type: 'text', text: promptText },
+                                { type: 'image_url', image_url: { url: imageUrl } }
+                            ]
+                        }
+                    ]
+                })
+            });
+
+            const data = await response.json();
+            if (data.choices && data.choices[0]?.message?.content) {
+                return data.choices[0].message.content;
+            }
+        } catch (err) {
+            console.warn('⚠️ OpenRouter Vision processing error.');
+        }
+    }
+
+    return "❌ Image scan nahi ho saki! Pehle Groq ya OpenRouter API Keys check karo.";
 }
 
 // PLAY AUDIO RESPONSE IN VC
