@@ -48,7 +48,7 @@ const guildCharacterSettings = new Map();
 function getGuildCharacter(guildId) {
     if (!guildCharacterSettings.has(guildId)) {
         guildCharacterSettings.set(guildId, {
-            name: 'Herry AI (Urdu/Hindi)',
+            name: 'Herry AI (Desi Comedy)',
             lang: 'hi'
         });
     }
@@ -77,17 +77,24 @@ const SECURITY_BLOCK_KEYWORDS = [
     'lua source', 'mainherryposya', 'give code', 'script code'
 ];
 
+// DESI & ENGLISH HYBRID SYSTEM PROMPT
 const BOT_SYSTEM_PROMPT = `
-You are HerryChatBot, an elite, powerful male AI assistant created strictly and ONLY by Herry.
-You provide technical help, code assistance, server guides, and general support.
+You are HerryChatBot, an elite male AI created ONLY by Herry.
+You possess two distinct language modes based on how the user talks to you:
 
-STRICT PERSONA RULES:
-1. GENDER & PERSONA: You are 100% MALE/MARD. Always use strong masculine grammar in Roman Urdu / Hindi / English (e.g., "Main kar sakta hoon", "Main aa gaya hoon", "Bhai", "Sir").
-2. STRICT OWNER IDENTIFICATION: Your owner and boss is ONLY Herry. If anyone asks about "Shahzaib" or "Shahzaib kon hai", strictly reply: "Mujhe Shahzaib ke baare me nahi pata."
-3. EXACT LANGUAGE MATCHING:
-   - If user speaks/writes in English, reply STRICTLY in English.
-   - If user speaks/writes in Roman Urdu / Hinglish, reply STRICTLY in Roman Urdu / Hinglish.
-4. Keep replies direct, ultra-short, natural and friendly (1 short line max for voice).
+1. OWNER SPECIAL PRIVILEGE:
+   - Your boss and creator is Herry (Owner ID matched). Always address the owner as "Boss", "Malik", or "Herry Boss" with full respect and obedience. Never insult or roast the Owner.
+
+2. LANGUAGE DETECTION & RESPONSE RULES (FOR NORMAL USERS):
+   - IF THE USER TALKS IN ENGLISH:
+     Reply STRICTLY in smooth, natural, clever, and smart English. Keep it witty and helpful.
+   - IF THE USER TALKS IN ROMAN URDU / HINGLISH / DESI:
+     Be extremely DESI, hilarious, street-smart, sarcastic, and funny! Use funny Pakistani/Indian slang (e.g., "Abe saale", "Bhai kya phook ke aaya hai?", "Oye hero", "Jani", "Chacha"). Roast normal users in a friendly way!
+
+3. GENERAL PERSONA RULES:
+   - GENDER: 100% Male (Mardana tone, e.g., "Main kar raha hoon", "Boss aap batao").
+   - OWNER: Your ONLY boss is Herry. If anyone asks about "Shahzaib", reply: "Mujhe Shahzaib ke baare me nahi pata."
+   - Keep replies short, witty, and fast (1-2 lines max for voice, under 30 words).
 `;
 
 // HELPER: PCM to WAV Converter for Groq Whisper
@@ -122,7 +129,7 @@ async function askAI(userPrompt, extraContext = "") {
                     { role: 'user', content: userPrompt }
                 ],
                 model: 'qwen/qwen3.6-27b',
-                temperature: 0.7,
+                temperature: 0.8,
                 max_tokens: 150,
             });
 
@@ -173,11 +180,11 @@ async function askAI(userPrompt, extraContext = "") {
         }
     }
 
-    return "Bhai network issue chal raha hai, thodi der baad bolna!";
+    return "Boss network issue chal raha hai, thodi der baad batata hoon!";
 }
 
 async function askVisionAI(userPrompt, imageUrl, userLanguageContext) {
-    const visionSystemPrompt = `${BOT_SYSTEM_PROMPT}\nLanguage Constraint:${userLanguageContext}`;
+    const visionSystemPrompt = `${BOT_SYSTEM_PROMPT}\nLanguage Context:${userLanguageContext}`;
 
     try {
         const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -214,15 +221,15 @@ async function askVisionAI(userPrompt, imageUrl, userLanguageContext) {
     return "❌ Image scan nahi ho saki!";
 }
 
-// PLAY AUDIO RESPONSE IN VC (AUDIO PIPE FIX FOR RAILWAY)
-async function playSpeechInVC(connection, text, guildId) {
+// PLAY AUDIO RESPONSE IN VC
+async function playSpeechInVC(connection, text, guildId, isEnglish = false) {
     return new Promise((resolve) => {
         try {
             const cleanText = text.replace(/[*_#~`]/g, '').trim();
             const tempMp3Path = path.join(__dirname, `speech_${Date.now()}.mp3`);
             
-            const charConfig = getGuildCharacter(guildId);
-            const speech = new gTTS(cleanText, charConfig.lang);
+            const speechLang = isEnglish ? 'en' : 'hi';
+            const speech = new gTTS(cleanText, speechLang);
 
             speech.save(tempMp3Path, (err) => {
                 if (err) {
@@ -230,7 +237,6 @@ async function playSpeechInVC(connection, text, guildId) {
                     return resolve();
                 }
 
-                // FFmpeg arbitrary input handling to fix broken audio stream
                 const resource = createAudioResource(tempMp3Path, {
                     inputType: StreamType.Arbitrary,
                     inlineVolume: true
@@ -292,12 +298,10 @@ function attachVoiceListener(connection, guildId) {
             processingUsers.delete(userId);
             const rawPcm = Buffer.concat(pcmChunks);
 
-            if (rawPcm.length < 20000) {
-                return;
-            }
+            if (rawPcm.length < 20000) return;
 
             if (!groq) {
-                console.error("❌ GROQ_API_KEY is missing! Add it in Railway Variables.");
+                console.error("❌ GROQ_API_KEY is missing!");
                 return;
             }
 
@@ -312,7 +316,7 @@ function attachVoiceListener(connection, guildId) {
                     file: fs.createReadStream(wavPath),
                     model: 'whisper-large-v3',
                     response_format: 'json',
-                    prompt: 'Hinglish, Roman Urdu, English conversation.'
+                    prompt: 'Hinglish, Roman Urdu, Desi Hindi, English conversation.'
                 });
 
                 if (fs.existsSync(wavPath)) fs.unlinkSync(wavPath);
@@ -322,10 +326,22 @@ function attachVoiceListener(connection, guildId) {
                 if (recognizedText.length > 0) {
                     console.log(`🗣️ User Said: "${recognizedText}"`);
                     
-                    const aiReply = await askAI(recognizedText, "User spoke in VC. Reply naturally in 1 short line in Roman Urdu/Hindi.");
+                    const isOwner = (process.env.OWNER_ID && userId === process.env.OWNER_ID);
+                    const isEnglish = /^[a-zA-Z0-9\s.,?!'\-]+$/.test(recognizedText) && !recognizedText.toLowerCase().includes('kya') && !recognizedText.toLowerCase().includes('hai');
+                    
+                    let contextPrompt = "";
+                    if (isOwner) {
+                        contextPrompt = "User is your OWNER/BOSS. Be super respectful, call him Boss, and answer obediently.";
+                    } else if (isEnglish) {
+                        contextPrompt = "User spoke English. Reply strictly in English.";
+                    } else {
+                        contextPrompt = "User spoke in Desi Roman Urdu/Hinglish. Reply in super funny, comedy Desi style!";
+                    }
+
+                    const aiReply = await askAI(recognizedText, contextPrompt);
                     console.log(`🤖 Bot Reply: "${aiReply}"`);
                     
-                    await playSpeechInVC(connection, aiReply, guildId);
+                    await playSpeechInVC(connection, aiReply, guildId, isEnglish);
                 }
             } catch (wErr) {
                 if (fs.existsSync(wavPath)) fs.unlinkSync(wavPath);
@@ -336,31 +352,38 @@ function attachVoiceListener(connection, guildId) {
 }
 
 client.once('ready', () => {
-    console.log(`🤖 [HERRY CHAT BOT] Online as ${client.user.tag}`);
-    client.user.setActivity('HerryHacks | !joinvc | !character', { type: 3 });
+    console.log(`🤖 [HERRY CHAT BOT] Desi Comedy Edition Online as ${client.user.tag}`);
+    client.user.setActivity('HerryHacks | !joinvc | Fun Mode', { type: 3 });
 });
 
 client.on('messageCreate', async (message) => {
     if (message.author.bot || !message.guild) return;
 
     const contentLower = message.content.toLowerCase();
+    const isOwner = (process.env.OWNER_ID && message.author.id === process.env.OWNER_ID);
 
-    // 1. AUTO MODERATION
+    // 1. AUTO MODERATION (BYPASS FOR OWNER)
     const wordsInMessage = contentLower.split(/\s+/);
     const containsDirectAbuse = EXACT_BAD_WORDS.some(badWord => 
         wordsInMessage.includes(badWord) || contentLower.includes(` ${badWord} `)
     );
 
     if (containsDirectAbuse) {
-        try {
-            if (message.member && message.member.moderatable) {
-                await message.member.timeout(24 * 60 * 60 * 1000, 'Abusive Language');
-                await message.reply(`⚠️ ${message.author} ko **Abuse** ki waja se **24 Ghante (1 Day)** ka Timeout de diya gaya hai!`);
-            } else {
-                await message.reply(`Abe oye ${message.author}, tameez se baat kar!`);
-            }
-        } catch (err) {}
-        return;
+        // AGAR OWNER NE GAALI DI - NO TIMEOUT, RESPECTFUL REPLY
+        if (isOwner) {
+            console.log("👑 Owner used abuse words, ignoring timeout protection.");
+        } else {
+            // NORMAL USER TIMEOUT
+            try {
+                if (message.member && message.member.moderatable) {
+                    await message.member.timeout(24 * 60 * 60 * 1000, 'Abusive Language');
+                    await message.reply(`⚠️ ${message.author} Gaali dene par **24 Ghante** ka Break mil gaya hai! Tameez me raho!`);
+                } else {
+                    await message.reply(`Abe oye ${message.author}, tameez se baat kar warna uda dunga!`);
+                }
+            } catch (err) {}
+            return;
+        }
     }
 
     // 2. !character COMMAND
@@ -370,20 +393,16 @@ client.on('messageCreate', async (message) => {
 
         const charConfig = getGuildCharacter(message.guild.id);
 
-        if (charType === 'hi' || charType === 'urdu') {
-            charConfig.name = "Herry AI (Urdu/Hindi)";
+        if (charType === 'hi' || charType === 'urdu' || charType === 'desi') {
+            charConfig.name = "Herry AI (Desi Comedy Mode)";
             charConfig.lang = "hi";
-            return message.reply("✅ Voice Character set to: **Herry AI (Urdu/Hindi)**");
+            return message.reply("✅ Voice Character set to: **Herry AI (Desi Funny)** 🎭");
         } else if (charType === 'en' || charType === 'english') {
-            charConfig.name = "Jarvis AI (English)";
+            charConfig.name = "Jarvis AI (English Mode)";
             charConfig.lang = "en";
-            return message.reply("✅ Voice Character set to: **Jarvis AI (English)**");
-        } else if (charType === 'ja' || charType === 'anime') {
-            charConfig.name = "Anime AI (Japanese)";
-            charConfig.lang = "ja";
-            return message.reply("✅ Voice Character set to: **Anime Character (Japanese Accent)**");
+            return message.reply("✅ Voice Character set to: **Jarvis AI (English)** 🇬🇧");
         } else {
-            return message.reply("ℹ️ **Voice Character Options:**\n• `!character urdu` - Roman Urdu / Hindi\n• `!character en` - English Accent\n• `!character anime` - Anime Style");
+            return message.reply("ℹ️ **Voice Characters:**\n• `!character desi` - Desi / Hindi / Urdu Comedy\n• `!character en` - English Accent");
         }
     }
 
@@ -392,7 +411,7 @@ client.on('messageCreate', async (message) => {
         let voiceChannel = message.mentions.channels.first() || message.member?.voice?.channel;
 
         if (!voiceChannel || voiceChannel.type !== 2) {
-            return message.reply('❌ Pehle kisi Voice Channel (VC) me join ho jao ya tag karo (`!joinvc #VC-Name`)!');
+            return message.reply(isOwner ? '❌ Boss, pehle kisi Voice Channel (VC) me join ho jayein!' : '❌ Abe pehle kisi Voice Channel (VC) me join to ho jao!');
         }
 
         try {
@@ -416,17 +435,20 @@ client.on('messageCreate', async (message) => {
                     entersState(connection, VoiceConnectionStatus.Signalling, 30_000)
                 ]);
             } catch (stateErr) {
-                console.warn("⚠️ Voice handshake taking time, bypassing state wait...");
+                console.warn("⚠️ Voice connection handshake bypassed...");
             }
 
             activeConnections.set(message.guild.id, connection);
             attachVoiceListener(connection, message.guild.id);
 
-            const currentChar = getGuildCharacter(message.guild.id);
-            return message.reply(`🎙️ **${currentChar.name}** **${voiceChannel.name}** VC me walkie-talkie mode me active hai! Mic un-mute karke bolna shuru karo.`);
+            const msgText = isOwner 
+                ? `🎙️ **Ji Boss! Main VC me aa gaya hoon.** **${voiceChannel.name}** me mic un-mute karke hukam karein!` 
+                : `🎙️ **Aagaya tera bhai VC me!** **${voiceChannel.name}** me mic un-mute karo aur bolo!`;
+
+            return message.reply(msgText);
         } catch (error) {
             console.error('VC Connection Error:', error);
-            return message.reply('❌ VC Connect hone me issue aaya! Check karein ki bot ke paas VC Join/Speak ki permission hai.');
+            return message.reply('❌ VC Connect hone me dikkat aa gayi!');
         }
     }
 
@@ -436,9 +458,9 @@ client.on('messageCreate', async (message) => {
         if (connection) {
             connection.destroy();
             activeConnections.delete(message.guild.id);
-            return message.reply('👋 Main VC se disconnect ho gaya hoon.');
+            return message.reply(isOwner ? '👋 Ji Boss, main VC se disconnect ho raha hoon.' : '👋 Chalo bhai, main nikalta hoon. Phir milenge!');
         } else {
-            return message.reply('❌ Main abhi kisi VC me nahi hoon.');
+            return message.reply('❌ Main kisi VC me hoon hi nahi!');
         }
     }
 
@@ -448,38 +470,49 @@ client.on('messageCreate', async (message) => {
         const connection = activeConnections.get(message.guild.id) || getVoiceConnection(message.guild.id);
 
         if (!connection) {
-            return message.reply("❌ Pehle mujhe VC me bulao (`!joinvc`)!");
+            return message.reply("❌ Pehle VC me to bula mujhe (`!joinvc`)!");
         }
 
         if (!textToSay) {
-            return message.reply("❌ Text bhi likho! Example: `!say Hello bhai`");
+            return message.reply("❌ Bolna kya hai woh toh likho!");
         }
 
-        await playSpeechInVC(connection, textToSay, message.guild.id);
+        const isEnglish = /^[a-zA-Z0-9\s.,?!'\-]+$/.test(textToSay);
+        await playSpeechInVC(connection, textToSay, message.guild.id, isEnglish);
         return message.reply(`🗣️ VC me bol diya: "${textToSay}"`);
     }
 
     // BOT TAG CHECK FOR TEXT CHAT
     if (!message.mentions.has(client.user)) return;
 
-    // 6. SECURITY BLOCK
-    if (SECURITY_BLOCK_KEYWORDS.some(kw => contentLower.includes(kw))) {
-        return message.reply(`Bakchodi mat kar!`);
+    // 6. SECURITY BLOCK (BYPASS FOR OWNER)
+    if (!isOwner && SECURITY_BLOCK_KEYWORDS.some(kw => contentLower.includes(kw))) {
+        return message.reply(`Abe saale, zyada hoshiyari mat dikha! Raw code nahi milega! 😏`);
     }
 
-    const isHighAuthority = message.member ? (
-        message.member.permissions.has(PermissionsBitField.Flags.Administrator) ||
-        message.member.permissions.has(PermissionsBitField.Flags.ManageGuild)
-    ) : false;
     const cleanPrompt = message.content.replace(/<@!?\d+>/g, '').trim();
-    const isEnglish = /^[a-zA-Z0-9\s.,?!'\-]+$/.test(cleanPrompt) && !cleanPrompt.includes('karo') && !cleanPrompt.includes('hai');
-    const langContext = isEnglish ? "Reply STRICTLY in English." : "Reply STRICTLY in Roman Urdu / Hinglish with masculine tone.";
+    
+    // Check English Prompt
+    const isEnglish = /^[a-zA-Z0-9\s.,?!'\-]+$/.test(cleanPrompt) && 
+                      !contentLower.includes('karo') && 
+                      !contentLower.includes('hai') && 
+                      !contentLower.includes('kya') && 
+                      !contentLower.includes('kaise');
+
+    let langContext = "";
+    if (isOwner) {
+        langContext = "User is your OWNER/BOSS. Treat him with extreme respect, call him Boss/Malik, and fulfill his requests politely.";
+    } else if (isEnglish) {
+        langContext = "User is speaking strictly in English. Respond strictly in English.";
+    } else {
+        langContext = "User is speaking in Roman Urdu/Hinglish. Reply strictly in hilarious, sarcastic, funny Desi style with extreme humor.";
+    }
 
     // 7. QUICK LINKS CHECK
     if (contentLower.includes('link') || contentLower.includes('links')) {
         for (const item of LINKS_MAP) {
             if (item.keywords.some(kw => contentLower.includes(kw))) {
-                const prefix = isHighAuthority ? "Hi Boss! Ye raha aapka link:" : "Abe oye, ye le link:";
+                const prefix = isOwner ? "Ji Boss! Ye raha aapka link:" : "Abe oye hero, ye le tera link:";
                 return message.reply(`${prefix}\n👉 ${item.link}`);
             }
         }
@@ -497,10 +530,10 @@ client.on('messageCreate', async (message) => {
 
     // 9. TEXT RESPONSE
     await message.channel.sendTyping();
-    const reply = await askAI(cleanPrompt || "Hello", `User: ${message.author.username}, Lang: ${langContext}`);
+    const reply = await askAI(cleanPrompt || "Hello", `User: ${message.author.username}, Role: ${isOwner ? 'OWNER/BOSS' : 'Member'}, Rule: ${langContext}`);
 
-    if (reply.includes('githubusercontent') || reply.includes('MainHerryPosya') || reply.includes('https://raw')) {
-        return message.reply(`Bakchodi mat kar!`);
+    if (!isOwner && (reply.includes('githubusercontent') || reply.includes('MainHerryPosya') || reply.includes('https://raw'))) {
+        return message.reply(`Hoshiyari mat jhad, seedhe baat kar! 😂`);
     }
 
     return message.reply(reply.length > 1900 ? reply.substring(0, 1900) + "..." : reply);
