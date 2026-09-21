@@ -55,7 +55,7 @@ function getGuildCharacter(guildId) {
     return guildCharacterSettings.get(guildId);
 }
 
-// DYNAMIC LINKS MAP (UPDATED AS REQUESTED)
+// DYNAMIC LINKS MAP (ENGLISH & ROMAN DESI SUPPORTED)
 const LINKS_MAP = [
     { 
         keywords: [
@@ -94,6 +94,7 @@ const LINKS_MAP = [
     }
 ];
 
+// EXTREME/HEAVY BAD WORDS FOR AUTO-MOD (24-HOUR TIMEOUT)
 const EXACT_BAD_WORDS = [
     'mc', 'bc', 'bsdk', 'madarchod', 'bhenchod', 'chutiya', 'gand', 'laude', 'bhosdike', 
     'fuck', 'bitch', 'asshole', 'bastard', 'motherfucker', 'cunt', 'dick'
@@ -105,24 +106,25 @@ const SECURITY_BLOCK_KEYWORDS = [
     'lua source', 'mainherryposya', 'give code', 'script code'
 ];
 
-// DESI & ENGLISH HYBRID SYSTEM PROMPT
+// DESI & ENGLISH HYBRID SYSTEM PROMPT WITH LIGHT-HEARTED COMEDY ROASTS
 const BOT_SYSTEM_PROMPT = `
 You are HerryChatBot, an elite male AI created ONLY by Herry.
-You possess two distinct language modes based on how the user talks to you:
 
 1. OWNER SPECIAL PRIVILEGE:
-   - Your boss and creator is Herry (Owner ID matched). Always address the owner as "Boss", "Malik", or "Herry Boss" with full respect and obedience. Never insult or roast the Owner.
+   - Your creator and boss is Herry (Owner ID matched). Always address the owner as "Boss", "Malik", or "Herry Boss" with full respect and obedience. NEVER roast or insult the Owner.
 
-2. LANGUAGE DETECTION & RESPONSE RULES (FOR NORMAL USERS):
+2. FUNNY / COMEDY ROASTING RULES (FOR NORMAL USERS):
    - IF THE USER TALKS IN ENGLISH:
-     Reply STRICTLY in smooth, natural, clever, and smart English. Keep it witty and helpful.
+     Reply in witty, smart, sarcastic, and funny English.
    - IF THE USER TALKS IN ROMAN URDU / HINGLISH / DESI:
-     Be extremely DESI, hilarious, street-smart, sarcastic, and funny! Use funny Pakistani/Indian slang (e.g., "Abe saale", "Bhai kya phook ke aaya hai?", "Oye hero", "Jani", "Chacha"). Roast normal users in a friendly way!
+     Be super funny, comedic, and light-heartedly sarcastic! Use hilarious desi friendly roasts and light slangs like:
+     "Abe saale", "Dhakkan", "Uloo ke patthe", "Pagallu", "Oye hero", "Chacha", "Bhai kya phook ke aaya hai?", "Kaan ke neeche bajega", "Abe khopdi ke".
+   - STRICT SAFETY RULE: NEVER use any family/mother/sister (maa-behen) bad words or heavy abuse! Keep all roasts strictly playful, super funny, and wholesome so the user laughs out loud and stays entertained throughout the chat.
 
 3. GENERAL PERSONA RULES:
-   - GENDER: 100% Male (Mardana tone, e.g., "Main kar raha hoon", "Boss aap batao").
-   - OWNER: Your ONLY boss is Herry. If anyone asks about "Shahzaib", reply: "Mujhe Shahzaib ke baare me nahi pata."
-   - Keep replies short, witty, and fast (1-2 lines max for voice, under 30 words).
+   - GENDER: 100% Male (Mardana style/attitude).
+   - OWNER INFO: Your ONLY owner is Herry. If asked about "Shahzaib", say: "Mujhe Shahzaib ke baare me nahi pata."
+   - Keep answers short, witty, fast, and hilarious (under 30 words).
 `;
 
 // HELPER: PCM to WAV Converter for Groq Whisper
@@ -148,7 +150,6 @@ function writeWavHeader(sampleRate, numChannels, pcmBuffer) {
 async function askAI(userPrompt, extraContext = "") {
     const fullSystemMessage = `${BOT_SYSTEM_PROMPT}\nUser Context:${extraContext}`;
 
-    // 1. PRIMARY: GROQ (qwen/qwen3.6-27b)
     if (groq) {
         try {
             const groqResponse = await groq.chat.completions.create({
@@ -157,7 +158,7 @@ async function askAI(userPrompt, extraContext = "") {
                     { role: 'user', content: userPrompt }
                 ],
                 model: 'qwen/qwen3.6-27b',
-                temperature: 0.8,
+                temperature: 0.85,
                 max_tokens: 150,
             });
 
@@ -169,7 +170,6 @@ async function askAI(userPrompt, extraContext = "") {
         }
     }
 
-    // 2. FALLBACKS: OPENROUTER FREE MODELS
     if (process.env.OPENROUTER_API_KEY) {
         const freeModels = [
             'qwen/qwen3.6-27b',
@@ -361,9 +361,9 @@ function attachVoiceListener(connection, guildId) {
                     if (isOwner) {
                         contextPrompt = "User is your OWNER/BOSS. Be super respectful, call him Boss, and answer obediently.";
                     } else if (isEnglish) {
-                        contextPrompt = "User spoke English. Reply strictly in English.";
+                        contextPrompt = "User spoke English. Reply strictly in English with witty humor.";
                     } else {
-                        contextPrompt = "User spoke in Desi Roman Urdu/Hinglish. Reply in super funny, comedy Desi style!";
+                        contextPrompt = "User spoke in Desi Roman Urdu/Hinglish. Reply in super hilarious, funny Desi style with harmless joke roasts!";
                     }
 
                     const aiReply = await askAI(recognizedText, contextPrompt);
@@ -390,22 +390,20 @@ client.on('messageCreate', async (message) => {
     const contentLower = message.content.toLowerCase();
     const isOwner = (process.env.OWNER_ID && message.author.id === process.env.OWNER_ID);
 
-    // 1. AUTO MODERATION (BYPASS FOR OWNER)
+    // 1. AUTO MODERATION FOR HEAVY ABUSE (BYPASS FOR OWNER)
     const wordsInMessage = contentLower.split(/\s+/);
     const containsDirectAbuse = EXACT_BAD_WORDS.some(badWord => 
         wordsInMessage.includes(badWord) || contentLower.includes(` ${badWord} `)
     );
 
     if (containsDirectAbuse) {
-        // AGAR OWNER NE GAALI DI - NO TIMEOUT, RESPECTFUL REPLY
         if (isOwner) {
-            console.log("👑 Owner used abuse words, ignoring timeout protection.");
+            console.log("👑 Owner used bad words, bypassing timeout.");
         } else {
-            // NORMAL USER TIMEOUT
             try {
                 if (message.member && message.member.moderatable) {
-                    await message.member.timeout(24 * 60 * 60 * 1000, 'Abusive Language');
-                    await message.reply(`⚠️ ${message.author} Gaali dene par **24 Ghante** ka Break mil gaya hai! Tameez me raho!`);
+                    await message.member.timeout(24 * 60 * 60 * 1000, 'Heavy Abusive Language');
+                    await message.reply(`⚠️ ${message.author} Gande alfaz bolne par **24 Ghante** ka break mil gaya hai! Tameez se baat karo!`);
                 } else {
                     await message.reply(`Abe oye ${message.author}, tameez se baat kar warna uda dunga!`);
                 }
@@ -414,15 +412,22 @@ client.on('messageCreate', async (message) => {
         }
     }
 
+    // LANGUAGE DETECTOR (ENGLISH vs ROMAN DESI)
+    const isEnglishLanguage = /^[a-zA-Z0-9\s.,?!'\-]+$/.test(contentLower) && 
+                              !contentLower.includes('kya') && 
+                              !contentLower.includes('kaise') && 
+                              !contentLower.includes('hai') && 
+                              !contentLower.includes('karo') && 
+                              !contentLower.includes('bhai') && 
+                              !contentLower.includes('aayega');
+
     // SPECIAL CHECK: GC HACK / MONEY HACK (UNAVAILABLE MESSAGE)
     const unavailableKeywords = ['gc hack', 'money hack', 'gc', 'moneyhack', 'gchack'];
     if (unavailableKeywords.some(kw => contentLower.includes(kw))) {
-        const isEng = /^[a-zA-Z0-9\s.,?!'\-]+$/.test(contentLower) && !contentLower.includes('kya') && !contentLower.includes('kaise') && !contentLower.includes('bhai');
-        
-        if (isEng) {
-            return message.reply("⚠️ Currently **GC Hack / Money Hack** is unavailable. We are working on it and it will be available soon, Inshallah!");
+        if (isEnglishLanguage) {
+            return message.reply(`${message.author}, ⚠️ **GC Hack / Money Hack** is currently unavailable. We are working on it and it will be released soon, Inshallah!`);
         } else {
-            return message.reply("⚠️ Abhi **GC Hack / Money Hack** unavailable hai, hum is par kaam kar rahe hain aur jaldi aayega Inshallah!");
+            return message.reply(`${message.author}, ⚠️ Abhi **GC Hack / Money Hack** unavailable hai, hum is par kaam kar rahe hain aur jaldi aayega Inshallah!`);
         }
     }
 
@@ -451,7 +456,7 @@ client.on('messageCreate', async (message) => {
         let voiceChannel = message.mentions.channels.first() || message.member?.voice?.channel;
 
         if (!voiceChannel || voiceChannel.type !== 2) {
-            return message.reply(isOwner ? '❌ Boss, pehle kisi Voice Channel (VC) me join ho jayein!' : '❌ Abe pehle kisi Voice Channel (VC) me join to ho jao!');
+            return message.reply(isOwner ? '❌ Boss, pehle kisi Voice Channel (VC) me join ho jayein!' : '❌ Abe dhakkan, pehle kisi Voice Channel (VC) me join to ho ja!');
         }
 
         try {
@@ -483,7 +488,7 @@ client.on('messageCreate', async (message) => {
 
             const msgText = isOwner 
                 ? `🎙️ **Ji Boss! Main VC me aa gaya hoon.** **${voiceChannel.name}** me mic un-mute karke hukam karein!` 
-                : `🎙️ **Aagaya tera bhai VC me!** **${voiceChannel.name}** me mic un-mute karo aur bolo!`;
+                : `🎙️ **Aa gaya tera bhai VC me!** **${voiceChannel.name}** me mic un-mute karo aur bolo, dekhein kya bakwas karni hai! 😂`;
 
             return message.reply(msgText);
         } catch (error) {
@@ -498,9 +503,9 @@ client.on('messageCreate', async (message) => {
         if (connection) {
             connection.destroy();
             activeConnections.delete(message.guild.id);
-            return message.reply(isOwner ? '👋 Ji Boss, main VC se disconnect ho raha hoon.' : '👋 Chalo bhai, main nikalta hoon. Phir milenge!');
+            return message.reply(isOwner ? '👋 Ji Boss, main VC se disconnect ho raha hoon.' : '👋 Chalo oye pagal, main nikalta hoon. Phir milenge!');
         } else {
-            return message.reply('❌ Main kisi VC me hoon hi nahi!');
+            return message.reply('❌ Main kisi VC me hoon hi nahi, kahan se niklu!');
         }
     }
 
@@ -514,7 +519,7 @@ client.on('messageCreate', async (message) => {
         }
 
         if (!textToSay) {
-            return message.reply("❌ Bolna kya hai woh toh likho!");
+            return message.reply("❌ Bolna kya hai woh toh likh, khali dimaag!");
         }
 
         const isEnglish = /^[a-zA-Z0-9\s.,?!'\-]+$/.test(textToSay);
@@ -524,13 +529,20 @@ client.on('messageCreate', async (message) => {
 
     // 6. SECURITY BLOCK (BYPASS FOR OWNER)
     if (!isOwner && SECURITY_BLOCK_KEYWORDS.some(kw => contentLower.includes(kw))) {
-        return message.reply(`Abe saale, zyada hoshiyari mat dikha! Raw code nahi milega! 😏`);
+        return message.reply(`Abe saale ${message.author}, zyada hoshiyari mat dikha! Raw code nahi milega! 😏`);
     }
 
-    // 7. QUICK LINKS CHECK (Direct matching included for normal chat & bot tags)
+    // 7. QUICK LINKS CHECK (WITH USER TAG SUPPORT & DUAL LANGUAGE)
     for (const item of LINKS_MAP) {
         if (item.keywords.some(kw => contentLower.includes(kw))) {
-            const prefix = isOwner ? "Ji Boss! Ye raha aapka link:" : "Abe oye hero, ye le tera link:";
+            let prefix = "";
+            if (isOwner) {
+                prefix = `Ji Boss ${message.author}! Ye raha aapka link:`;
+            } else if (isEnglishLanguage) {
+                prefix = `Hey ${message.author}, here is your requested link:`;
+            } else {
+                prefix = `Abe oye ${message.author}, ye le tera link:`;
+            }
             return message.reply(`${prefix}\n👉 ${item.link}`);
         }
     }
@@ -539,21 +551,14 @@ client.on('messageCreate', async (message) => {
     if (!message.mentions.has(client.user)) return;
 
     const cleanPrompt = message.content.replace(/<@!?\d+>/g, '').trim();
-    
-    // Check English Prompt
-    const isEnglish = /^[a-zA-Z0-9\s.,?!'\-]+$/.test(cleanPrompt) && 
-                      !contentLower.includes('karo') && 
-                      !contentLower.includes('hai') && 
-                      !contentLower.includes('kya') && 
-                      !contentLower.includes('kaise');
 
     let langContext = "";
     if (isOwner) {
         langContext = "User is your OWNER/BOSS. Treat him with extreme respect, call him Boss/Malik, and fulfill his requests politely.";
-    } else if (isEnglish) {
-        langContext = "User is speaking strictly in English. Respond strictly in English.";
+    } else if (isEnglishLanguage) {
+        langContext = "User is speaking strictly in English. Respond strictly in English with clever humor.";
     } else {
-        langContext = "User is speaking in Roman Urdu/Hinglish. Reply strictly in hilarious, sarcastic, funny Desi style with extreme humor.";
+        langContext = "User is speaking in Roman Urdu/Hinglish. Reply in super funny, witty Desi comedic roasts (e.g., 'Abe saale', 'Dhakkan', 'Oye hero'). Strictly DO NOT use any mother/sister bad words!";
     }
 
     // 8. IMAGE ATTACHMENT SCANNER
@@ -571,7 +576,7 @@ client.on('messageCreate', async (message) => {
     const reply = await askAI(cleanPrompt || "Hello", `User: ${message.author.username}, Role: ${isOwner ? 'OWNER/BOSS' : 'Member'}, Rule: ${langContext}`);
 
     if (!isOwner && (reply.includes('githubusercontent') || reply.includes('MainHerryPosya') || reply.includes('https://raw'))) {
-        return message.reply(`Hoshiyari mat jhad, seedhe baat kar! 😂`);
+        return message.reply(`Hoshiyari mat jhad ${message.author}, seedhe baat kar! 😂`);
     }
 
     return message.reply(reply.length > 1900 ? reply.substring(0, 1900) + "..." : reply);
