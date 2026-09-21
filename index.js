@@ -135,7 +135,7 @@ function writeWavHeader(sampleRate, numChannels, pcmBuffer) {
     header.write('WAVE', 8);
     header.write('fmt ', 12);
     header.writeUInt32LE(16, 16);
-    header.writeUInt16LE(1, 20); // PCM Format
+    header.writeUInt32LE(1, 20); // PCM Format
     header.writeUInt16LE(numChannels, 22);
     header.writeUInt32LE(sampleRate, 24);
     header.writeUInt32LE(sampleRate * numChannels * 2, 28);
@@ -172,13 +172,31 @@ async function askAI(userPrompt, extraContext = "") {
 
     if (process.env.OPENROUTER_API_KEY) {
         const freeModels = [
-            'meta-llama/llama-3.3-70b-instruct:free',
-            'openai/gpt-oss-120b:free',
-            'qwen/qwen3-next-80b-a3b-instruct:free',
+            'qwen/qwen3.8-27b:free',
             'google/gemma-4-31b-it:free',
-            'qwen/qwen3-coder:free',
+            'nvidia/nemotron-3-super-120b-a12b:free',
+            'dots-studio/dots-3-note-preview:free',
             'nvidia/nemotron-3-ultra-550b-a55b:free',
-            'openrouter/free'
+            'inclusionai/ling-3.0-flash-vl:free',
+            'nex-agi/nex-n2.5-mini:free',
+            'inclusionai/ling-3.0-flash-sante:free',
+            'inclusionai/ling-3.0-flash-fin:free',
+            'poolside/laguna-s-2.1:free',
+            'liquid/lfm-2.5-2.6b:free',
+            'google/gemma-4-26b-a4b-it:free',
+            'nex-agi/nex-n2.5-pro:free',
+            'nvidia/nemotron-3.5-content-safety:free',
+            'cohere/north-mini-code:free',
+            'z-ai/glm-5.2:free',
+            'nvidia/nemotron-3.5-lightning:free',
+            'poolside/laguna-xs-2.1:free',
+            'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free',
+            'thinkingmachines/inkling-small:free',
+            'thinkingmachines/inkling:free',
+            'google/lyria-3-pro-preview',
+            'google/lyria-3-clip-preview',
+            'openrouter/free',
+            'pollinations/openai-fast'
         ];
 
         for (const modelId of freeModels) {
