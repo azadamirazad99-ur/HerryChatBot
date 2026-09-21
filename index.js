@@ -157,7 +157,7 @@ async function askAI(userPrompt, extraContext = "") {
                     { role: 'system', content: fullSystemMessage },
                     { role: 'user', content: userPrompt }
                 ],
-                model: 'qwen/qwen3.6-27b',
+                model: 'openai/gpt-oss-20b',
                 temperature: 0.85,
                 max_tokens: 150,
             });
@@ -172,10 +172,12 @@ async function askAI(userPrompt, extraContext = "") {
 
     if (process.env.OPENROUTER_API_KEY) {
         const freeModels = [
-            'qwen/qwen3.6-27b',
-            'openai/gpt-oss-120b',
-            'nvidia/nemotron-3-ultra-550b:free',
-            'openai/gpt-oss-20b',
+            'meta-llama/llama-3.3-70b-instruct:free',
+            'openai/gpt-oss-120b:free',
+            'qwen/qwen3-next-80b-a3b-instruct:free',
+            'google/gemma-4-31b-it:free',
+            'qwen/qwen3-coder:free',
+            'nvidia/nemotron-3-ultra-550b-a55b:free',
             'openrouter/free'
         ];
 
@@ -224,7 +226,7 @@ async function askVisionAI(userPrompt, imageUrl, userLanguageContext) {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                model: 'openrouter/free',
+                model: 'google/gemma-4-31b-it:free',
                 messages: [
                     { role: 'system', content: visionSystemPrompt },
                     {
