@@ -55,15 +55,43 @@ function getGuildCharacter(guildId) {
     return guildCharacterSettings.get(guildId);
 }
 
-// DYNAMIC LINKS MAP
+// DYNAMIC LINKS MAP (UPDATED AS REQUESTED)
 const LINKS_MAP = [
-    { keywords: ['reversoqzz', 'reverso'], link: 'https://discord.com/channels/1529467083962843186/1529477377917452339/1529524492450402506' },
-    { keywords: ['lulubox'], link: 'https://discord.com/channels/1529467083962843186/1529477377917452339/1529527842097074206' },
-    { keywords: ['devvir'], link: 'https://discord.com/channels/1529467083962843186/1529477377917452339/1529527533660405790' },
-    { keywords: ['multispace', 'multi space'], link: 'https://discord.com/channels/1529467083962843186/1531705203487932597' },
-    { keywords: ['herry.lua', 'posya', 'herry lua', 'posya lua', 'script', 'lua'], link: 'https://discord.com/channels/1529467083962843186/1529477377917452339/1542089775715057694' },
-    { keywords: ['setup', 'where is setup', 'setup link', 'setup kaha se karu'], link: 'https://discord.com/channels/1529467083962843186/1529477486235226172' },
-    { keywords: ['getkey', 'key', 'how to get key', 'where is key'], link: 'https://discord.com/channels/1529467083962843186/1541722634927214622' }
+    { 
+        keywords: [
+            'reversoqzz', 'reverso', 'hack link', 'how to get hack', 'get hack', 
+            'lulubox', 'devvir', 'devvir app', 'script link', 'herry-script', 
+            'herry script', 'script link?', 'grand mobile rp hack', 'grand mobile hack'
+        ], 
+        link: 'https://discord.com/channels/1529467083962843186/1529477377917452339' 
+    },
+    { 
+        keywords: [
+            'mg hack', 'mg hack link', 'mg script', 'mg script link', 
+            'auto job', 'auto job hack', 'auto job link'
+        ], 
+        link: 'https://discord.com/channels/1529467083962843186/1545725992532713482' 
+    },
+    { 
+        keywords: ['multispace', 'multi space'], 
+        link: 'https://discord.com/channels/1529467083962843186/1531705203487932597' 
+    },
+    { 
+        keywords: ['herry.lua', 'posya', 'herry lua', 'posya lua', 'lua'], 
+        link: 'https://discord.com/channels/1529467083962843186/1529477377917452339/1542089775715057694' 
+    },
+    { 
+        keywords: [
+            'where is setup', 'setup', 'how to setup', 'how to setup this', 
+            'setup link', 'setup kaha se karu', 'i didnt understand', 
+            'i didn\'t understand', 'how to use hack', 'how to use'
+        ], 
+        link: 'https://discord.com/channels/1529467083962843186/1529477486235226172' 
+    },
+    { 
+        keywords: ['getkey', 'key', 'how to get key', 'where is key'], 
+        link: 'https://discord.com/channels/1529467083962843186/1541722634927214622' 
+    }
 ];
 
 const EXACT_BAD_WORDS = [
@@ -386,6 +414,18 @@ client.on('messageCreate', async (message) => {
         }
     }
 
+    // SPECIAL CHECK: GC HACK / MONEY HACK (UNAVAILABLE MESSAGE)
+    const unavailableKeywords = ['gc hack', 'money hack', 'gc', 'moneyhack', 'gchack'];
+    if (unavailableKeywords.some(kw => contentLower.includes(kw))) {
+        const isEng = /^[a-zA-Z0-9\s.,?!'\-]+$/.test(contentLower) && !contentLower.includes('kya') && !contentLower.includes('kaise') && !contentLower.includes('bhai');
+        
+        if (isEng) {
+            return message.reply("⚠️ Currently **GC Hack / Money Hack** is unavailable. We are working on it and it will be available soon, Inshallah!");
+        } else {
+            return message.reply("⚠️ Abhi **GC Hack / Money Hack** unavailable hai, hum is par kaam kar rahe hain aur jaldi aayega Inshallah!");
+        }
+    }
+
     // 2. !character COMMAND
     if (contentLower.startsWith('!character')) {
         const args = contentLower.split(/\s+/);
@@ -482,13 +522,21 @@ client.on('messageCreate', async (message) => {
         return message.reply(`🗣️ VC me bol diya: "${textToSay}"`);
     }
 
-    // BOT TAG CHECK FOR TEXT CHAT
-    if (!message.mentions.has(client.user)) return;
-
     // 6. SECURITY BLOCK (BYPASS FOR OWNER)
     if (!isOwner && SECURITY_BLOCK_KEYWORDS.some(kw => contentLower.includes(kw))) {
         return message.reply(`Abe saale, zyada hoshiyari mat dikha! Raw code nahi milega! 😏`);
     }
+
+    // 7. QUICK LINKS CHECK (Direct matching included for normal chat & bot tags)
+    for (const item of LINKS_MAP) {
+        if (item.keywords.some(kw => contentLower.includes(kw))) {
+            const prefix = isOwner ? "Ji Boss! Ye raha aapka link:" : "Abe oye hero, ye le tera link:";
+            return message.reply(`${prefix}\n👉 ${item.link}`);
+        }
+    }
+
+    // BOT TAG CHECK FOR TEXT CHAT AI RESPONSES
+    if (!message.mentions.has(client.user)) return;
 
     const cleanPrompt = message.content.replace(/<@!?\d+>/g, '').trim();
     
@@ -506,16 +554,6 @@ client.on('messageCreate', async (message) => {
         langContext = "User is speaking strictly in English. Respond strictly in English.";
     } else {
         langContext = "User is speaking in Roman Urdu/Hinglish. Reply strictly in hilarious, sarcastic, funny Desi style with extreme humor.";
-    }
-
-    // 7. QUICK LINKS CHECK
-    if (contentLower.includes('link') || contentLower.includes('links')) {
-        for (const item of LINKS_MAP) {
-            if (item.keywords.some(kw => contentLower.includes(kw))) {
-                const prefix = isOwner ? "Ji Boss! Ye raha aapka link:" : "Abe oye hero, ye le tera link:";
-                return message.reply(`${prefix}\n👉 ${item.link}`);
-            }
-        }
     }
 
     // 8. IMAGE ATTACHMENT SCANNER
