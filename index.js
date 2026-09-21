@@ -111,8 +111,9 @@ function writeWavHeader(sampleRate, numChannels, pcmBuffer) {
 
 // ASK AI USING GROQ OR OPENROUTER FREE MODELS
 async function askAI(userPrompt, extraContext = "") {
-    const fullSystemMessage = `${BOT_SYSTEM_PROMPT}\nUser Context: ${extraContext}`;
+    const fullSystemMessage = `${BOT_SYSTEM_PROMPT}\nUser Context:${extraContext}`;
 
+    // 1. PRIMARY: GROQ (qwen/qwen3.6-27b)
     if (groq) {
         try {
             const groqResponse = await groq.chat.completions.create({
@@ -120,7 +121,7 @@ async function askAI(userPrompt, extraContext = "") {
                     { role: 'system', content: fullSystemMessage },
                     { role: 'user', content: userPrompt }
                 ],
-                model: 'llama-3.1-8b-instant',
+                model: 'qwen/qwen3.6-27b',
                 temperature: 0.7,
                 max_tokens: 150,
             });
@@ -129,35 +130,46 @@ async function askAI(userPrompt, extraContext = "") {
                 return groqResponse.choices[0].message.content;
             }
         } catch (err) {
-            console.warn('⚠️ Groq Primary LLM Failed. Switching to OpenRouter Free...');
+            console.warn('⚠️ Groq Primary LLM Failed. Switching to OpenRouter Free Models...');
         }
     }
 
+    // 2. FALLBACKS: OPENROUTER FREE MODELS
     if (process.env.OPENROUTER_API_KEY) {
-        try {
-            const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-                    'HTTP-Referer': 'https://railway.app',
-                    'X-Title': 'HerryChatBot',
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    model: 'meta-llama/llama-3.2-3b-instruct:free',
-                    messages: [
-                        { role: 'system', content: fullSystemMessage },
-                        { role: 'user', content: userPrompt }
-                    ]
-                })
-            });
+        const freeModels = [
+            'qwen/qwen3.6-27b',
+            'openai/gpt-oss-120b',
+            'nvidia/nemotron-3-ultra-550b:free',
+            'openai/gpt-oss-20b',
+            'openrouter/free'
+        ];
 
-            const data = await response.json();
-            if (data.choices && data.choices[0]?.message?.content) {
-                return data.choices[0].message.content;
+        for (const modelId of freeModels) {
+            try {
+                const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+                        'HTTP-Referer': 'https://railway.app',
+                        'X-Title': 'HerryChatBot',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        model: modelId,
+                        messages: [
+                            { role: 'system', content: fullSystemMessage },
+                            { role: 'user', content: userPrompt }
+                        ]
+                    })
+                });
+
+                const data = await response.json();
+                if (data.choices && data.choices[0]?.message?.content) {
+                    return data.choices[0].message.content;
+                }
+            } catch (openRouterErr) {
+                console.warn(`⚠️ OpenRouter Model ${modelId} failed, trying next...`);
             }
-        } catch (openRouterErr) {
-            console.error('❌ OpenRouter Error:', openRouterErr);
         }
     }
 
@@ -165,7 +177,7 @@ async function askAI(userPrompt, extraContext = "") {
 }
 
 async function askVisionAI(userPrompt, imageUrl, userLanguageContext) {
-    const visionSystemPrompt = `${BOT_SYSTEM_PROMPT}\nLanguage Constraint: ${userLanguageContext}`;
+    const visionSystemPrompt = `${BOT_SYSTEM_PROMPT}\nLanguage Constraint:${userLanguageContext}`;
 
     try {
         const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
