@@ -39,6 +39,11 @@ const client = new Client({
 // INITIALIZE GROQ CLIENT
 const groq = process.env.GROQ_API_KEY ? new Groq({ apiKey: process.env.GROQ_API_KEY }) : null;
 
+// CONSTANTS & CHANNEL IDS
+const GETKEY_CHANNEL_ID = '1541722634927214622';
+const HERRYSCRIPT_LINK = 'https://discord.com/channels/1529467083962843186/1529477377917452339';
+const SETUP_CHANNEL_LINK = 'https://discord.com/channels/1529467083962843186/1529477486235226172';
+
 // ACTIVE VOICE CONNECTIONS MAP
 const activeConnections = new Map();
 
@@ -55,41 +60,37 @@ function getGuildCharacter(guildId) {
     return guildCharacterSettings.get(guildId);
 }
 
-// DYNAMIC LINKS MAP (ENGLISH & ROMAN DESI SUPPORTED)
+// DYNAMIC LINKS MAP (ONLY EXPLICIT LINK REQUESTS)
 const LINKS_MAP = [
     { 
         keywords: [
-            'reversoqzz', 'reverso', 'hack link', 'how to get hack', 'get hack', 
-            'lulubox', 'devvir', 'devvir app', 'script link', 'herry-script', 
-            'herry script', 'script link?', 'grand mobile rp hack', 'grand mobile hack'
+            'hack link', 'how to get hack', 'get hack', 'where is hack',
+            'script link', 'script link?', 'grand mobile rp hack', 'grand mobile hack'
         ], 
-        link: 'https://discord.com/channels/1529467083962843186/1529477377917452339' 
+        link: HERRYSCRIPT_LINK 
     },
     { 
         keywords: [
-            'mg hack', 'mg hack link', 'mg script', 'mg script link', 
-            'auto job', 'auto job hack', 'auto job link'
+            'mg hack link', 'mg script link', 'auto job link'
         ], 
         link: 'https://discord.com/channels/1529467083962843186/1545725992532713482' 
     },
     { 
-        keywords: ['multispace', 'multi space'], 
+        keywords: ['multispace link', 'multi space link'], 
         link: 'https://discord.com/channels/1529467083962843186/1531705203487932597' 
     },
     { 
-        keywords: ['herry.lua', 'posya', 'herry lua', 'posya lua', 'lua'], 
+        keywords: ['herry.lua link', 'posya lua link', 'lua link'], 
         link: 'https://discord.com/channels/1529467083962843186/1529477377917452339/1542089775715057694' 
     },
     { 
         keywords: [
-            'where is setup', 'setup', 'how to setup', 'how to setup this', 
-            'setup link', 'setup kaha se karu', 'i didnt understand', 
-            'i didn\'t understand', 'how to use hack', 'how to use'
+            'setup link', 'setup channel link', 'where is setup link', 'give setup link'
         ], 
-        link: 'https://discord.com/channels/1529467083962843186/1529477486235226172' 
+        link: SETUP_CHANNEL_LINK 
     },
     { 
-        keywords: ['getkey', 'key', 'how to get key', 'where is key'], 
+        keywords: ['how to get key', 'where is key', 'key link'], 
         link: 'https://discord.com/channels/1529467083962843186/1541722634927214622' 
     }
 ];
@@ -113,15 +114,20 @@ You are HerryChatBot, an elite male AI created ONLY by Herry.
 1. OWNER SPECIAL PRIVILEGE:
    - Your creator and boss is Herry (Owner ID matched). Always address the owner as "Boss", "Malik", or "Herry Boss" with full respect and obedience. NEVER roast or insult the Owner.
 
-2. FUNNY / COMEDY ROASTING RULES (FOR NORMAL USERS):
+2. HACK & SETUP QUERY HANDLING:
+   - If user asks about hacks, where to get hacks, or scripts, provide the channel link: ${HERRYSCRIPT_LINK}
+   - If user asks about setup, guide, or videos for hacks (e.g. "I want setup for hacks", "how to setup", "setup video"), reply EXACTLY with this message format:
+     "here is every video please first watch videos To understand The hack guidance: ${SETUP_CHANNEL_LINK}"
+
+3. FUNNY / COMEDY ROASTING RULES (FOR NORMAL USERS):
    - IF THE USER TALKS IN ENGLISH:
      Reply in witty, smart, sarcastic, and funny English.
    - IF THE USER TALKS IN ROMAN URDU / HINGLISH / DESI:
      Be super funny, comedic, and light-heartedly sarcastic! Use hilarious desi friendly roasts and light slangs like:
      "Abe saale", "Dhakkan", "Uloo ke patthe", "Pagallu", "Oye hero", "Chacha", "Bhai kya phook ke aaya hai?", "Kaan ke neeche bajega", "Abe khopdi ke".
-   - STRICT SAFETY RULE: NEVER use any family/mother/sister (maa-behen) bad words or heavy abuse! Keep all roasts strictly playful, super funny, and wholesome so the user laughs out loud and stays entertained throughout the chat.
+   - STRICT SAFETY RULE: NEVER use any family/mother/sister (maa-behen) bad words or heavy abuse! Keep all roasts strictly playful, super funny, and wholesome.
 
-3. GENERAL PERSONA RULES:
+4. GENERAL PERSONA RULES:
    - GENDER: 100% Male (Mardana style/attitude).
    - OWNER INFO: Your ONLY owner is Herry. If asked about "Shahzaib", say: "Mujhe Shahzaib ke baare me nahi pata."
    - Keep answers short, witty, fast, and hilarious (under 30 words).
@@ -231,16 +237,15 @@ async function askAI(userPrompt, extraContext = "") {
     return "Boss network issue chal raha hai, thodi der baad batata hoon!";
 }
 
-// ASK VISION AI WITH GROQ & OPENROUTER FALLBACKS (ADDED FROM SCREENSHOT)
+// ASK VISION AI WITH GROQ & OPENROUTER FALLBACKS
 async function askVisionAI(userPrompt, imageUrl, userLanguageContext) {
     const visionSystemPrompt = `${BOT_SYSTEM_PROMPT}\nLanguage Context:${userLanguageContext}`;
     const promptText = userPrompt || 'Explain what is visible in this image.';
 
-    // 1. TRY GROQ VISION MODELS (PRIMARY & BACKUP)
     if (groq) {
         const groqVisionModels = [
-            'meta-llama/llama-4-scout-17b-16e-instruct',    // Recommended Primary (Fast, Image Grounding)
-            'meta-llama/llama-4-maverick-17b-128e-instruct' // Recommended Fallback (Better Image Understanding)
+            'meta-llama/llama-4-scout-17b-16e-instruct',
+            'meta-llama/llama-4-maverick-17b-128e-instruct'
         ];
 
         for (const modelId of groqVisionModels) {
@@ -271,7 +276,6 @@ async function askVisionAI(userPrompt, imageUrl, userLanguageContext) {
         }
     }
 
-    // 2. OPENROUTER VISION FALLBACK MODEL
     if (process.env.OPENROUTER_API_KEY) {
         try {
             console.log('📸 Trying OpenRouter Vision Model: google/gemma-4-31b-it:free');
@@ -451,7 +455,12 @@ client.on('messageCreate', async (message) => {
     const contentLower = message.content.toLowerCase();
     const isOwner = (process.env.OWNER_ID && message.author.id === process.env.OWNER_ID);
 
-    // 1. AUTO MODERATION FOR HEAVY ABUSE (BYPASS FOR OWNER)
+    // 1. GETKEY CHANNEL SPECIFIC RULE
+    if (message.channel.id === GETKEY_CHANNEL_ID) {
+        return message.reply("Hey type here slash command In this Channel Use slash command /getkey and Get the key and dont message here");
+    }
+
+    // 2. AUTO MODERATION FOR HEAVY ABUSE (BYPASS FOR OWNER)
     const wordsInMessage = contentLower.split(/\s+/);
     const containsDirectAbuse = EXACT_BAD_WORDS.some(badWord => 
         wordsInMessage.includes(badWord) || contentLower.includes(` ${badWord} `)
@@ -492,7 +501,7 @@ client.on('messageCreate', async (message) => {
         }
     }
 
-    // 2. !character COMMAND
+    // 3. !character COMMAND
     if (contentLower.startsWith('!character')) {
         const args = contentLower.split(/\s+/);
         const charType = args[1];
@@ -512,7 +521,7 @@ client.on('messageCreate', async (message) => {
         }
     }
 
-    // 3. !joinvc COMMAND
+    // 4. !joinvc COMMAND
     if (contentLower.startsWith('!joinvc')) {
         let voiceChannel = message.mentions.channels.first() || message.member?.voice?.channel;
 
@@ -558,7 +567,7 @@ client.on('messageCreate', async (message) => {
         }
     }
 
-    // 4. !leavevc COMMAND
+    // 5. !leavevc COMMAND
     if (contentLower === '!leavevc') {
         const connection = activeConnections.get(message.guild.id) || getVoiceConnection(message.guild.id);
         if (connection) {
@@ -570,7 +579,7 @@ client.on('messageCreate', async (message) => {
         }
     }
 
-    // 5. !say COMMAND
+    // 6. !say COMMAND
     if (contentLower.startsWith('!say')) {
         const textToSay = message.content.slice(4).trim();
         const connection = activeConnections.get(message.guild.id) || getVoiceConnection(message.guild.id);
@@ -588,12 +597,18 @@ client.on('messageCreate', async (message) => {
         return message.reply(`🗣️ VC me bol diya: "${textToSay}"`);
     }
 
-    // 6. SECURITY BLOCK (BYPASS FOR OWNER)
+    // 7. SECURITY BLOCK (BYPASS FOR OWNER)
     if (!isOwner && SECURITY_BLOCK_KEYWORDS.some(kw => contentLower.includes(kw))) {
         return message.reply(`Abe saale ${message.author}, zyada hoshiyari mat dikha! Raw code nahi milega! 😏`);
     }
 
-    // 7. QUICK LINKS CHECK (WITH USER TAG SUPPORT & DUAL LANGUAGE)
+    // 8. DIRECT HACK QUESTION CHECK
+    const directHackQuestions = ['where is hack', 'hack link', 'give hack', 'hack kidhar hai', 'hack kaha hai', 'where hack'];
+    if (directHackQuestions.some(q => contentLower.includes(q))) {
+        return message.reply(`Ye raha HerryScript channel link:\n👉 ${HERRYSCRIPT_LINK}`);
+    }
+
+    // 9. QUICK LINKS CHECK (FOR SPECIFIC LINK REQUESTS ONLY)
     for (const item of LINKS_MAP) {
         if (item.keywords.some(kw => contentLower.includes(kw))) {
             let prefix = "";
@@ -622,7 +637,7 @@ client.on('messageCreate', async (message) => {
         langContext = "User is speaking in Roman Urdu/Hinglish. Reply in super funny, witty Desi comedic roasts (e.g., 'Abe saale', 'Dhakkan', 'Oye hero'). Strictly DO NOT use any mother/sister bad words!";
     }
 
-    // 8. IMAGE ATTACHMENT SCANNER
+    // 10. IMAGE ATTACHMENT SCANNER
     if (message.attachments.size > 0) {
         const image = message.attachments.first();
         if (image.contentType && image.contentType.startsWith('image/')) {
@@ -632,7 +647,7 @@ client.on('messageCreate', async (message) => {
         }
     }
 
-    // 9. TEXT RESPONSE
+    // 11. TEXT RESPONSE VIA AI
     await message.channel.sendTyping();
     const reply = await askAI(cleanPrompt || "Hello", `User: ${message.author.username}, Role: ${isOwner ? 'OWNER/BOSS' : 'Member'}, Rule: ${langContext}`);
 
