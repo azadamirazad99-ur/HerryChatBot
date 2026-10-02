@@ -664,7 +664,7 @@ client.on('messageCreate', async (message) => {
             const target = message.mentions.members.first();
             if (target) {
                 await target.kick(args.slice(1).join(' ') || 'No reason');
-                message.channel.send(``👞 **${target.user.tag}** was kicked!`);
+                message.channel.send(`👞 **${target.user.tag}** was kicked!`);
             }
         }
 
