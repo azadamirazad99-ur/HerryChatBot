@@ -17,7 +17,8 @@ const {
     ChannelType,
     REST,
     Routes,
-    Collection
+    Collection,
+    ActivityType
 } = require('discord.js');
 
 const { 
@@ -401,7 +402,7 @@ if (fs.existsSync(commandsPath)) {
 // BOT READY
 client.once('ready', async () => {
     console.log(`✅ [HERRY BOT] Connected as ${client.user.tag}`);
-    client.user.setActivity('HerryHacks VIP | Voice AI & Moderation', { type: 3 });
+    client.user.setActivity('HerryChatBot | HerryKing', { type: ActivityType.Playing });
 
     const rest = new REST({ version: '10' }).setToken(process.env.TOKEN || process.env.DISCORD_TOKEN);
     try {
