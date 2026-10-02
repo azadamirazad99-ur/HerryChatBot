@@ -399,10 +399,19 @@ if (fs.existsSync(commandsPath)) {
     fs.mkdirSync(commandsPath);
 }
 
-// BOT READY
+// BOT READY - Streaming Presence Configured
 client.once('ready', async () => {
     console.log(`✅ [HERRY BOT] Connected as ${client.user.tag}`);
-    client.user.setActivity('HerryChatBot | HerryKing', { type: ActivityType.Playing });
+    
+    // Activity Status set to Streaming (Twitch / YouTube Live Status)
+    client.user.setPresence({
+        activities: [{
+            name: 'HerryHacks Official Live | Grand Mobile RP',
+            type: ActivityType.Streaming,
+            url: 'https://www.twitch.tv/herryhacks'
+        }],
+        status: 'online'
+    });
 
     const rest = new REST({ version: '10' }).setToken(process.env.TOKEN || process.env.DISCORD_TOKEN);
     try {
